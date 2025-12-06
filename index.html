@@ -3,12 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IPTV Teste</title>
+<title>Site em Teste</title>
 
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="https://i.imgur.com/jFQiZvL.jpeg">
 <link rel="apple-touch-icon" href="https://i.imgur.com/jFQiZvL.jpeg">
 <meta name="theme-color" content="#1e90ff">
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js")
+    .then(() => console.log("SW registrado"))
+    .catch(err => console.error("Erro SW:", err));
+}
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/clappr@latest/dist/clappr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -45,7 +53,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 </head>
 <body>
 
-<!-- LOGIN -->
+<!-- TELA DE LOGIN -->
 <div id="senhaSection">
   <div style="max-width:480px; background:#111; padding:15px; border-radius:12px; box-shadow:0 0 12px rgba(0,0,0,0.7); color:#fff; line-height:1.4; font-size:13px;">
     <h2 style="color:#1e90ff; text-align:center; margin-bottom:10px; font-size:18px;">Bem-vindo!</h2>
@@ -60,7 +68,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   </div>
 </div>
 
-<!-- CONTAINER IPTV -->
+<!-- CONTAINER PRINCIPAL IPTV -->
 <div class="container">
   <div class="sidebar">
     <div class="top-buttons">
@@ -88,13 +96,9 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
 const categoriasValidas = ['Classic','Series','Kids','Religioso','Variedade','TESTE','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
-
-let allChannels = [];
-let favorites = JSON.parse(localStorage.getItem("favorites")||"[]");
-let currentIndex = 0;
-let canaisAtuais = [];
-let lastCategory = null;
-let lastChannelIndex = 0;
+let allChannels = [], favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+let currentIndex = 0, canaisAtuais = [];
+let lastCategory = null, lastChannelIndex = 0;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
@@ -106,46 +110,46 @@ let clapprPlayer = null;
 // ===== LOGIN =====
 document.getElementById("senhaBtn").onclick = () => {
   const senha = document.getElementById("senhaInput").value;
-  if(senhasValidas.includes(senha)){
-    localStorage.setItem("iptv_password",senha);
-    senhaSection.style.display="none";
-    container.style.display="flex";
+  if (senhasValidas.includes(senha)) {
+    localStorage.setItem("iptv_password", senha);
+    senhaSection.style.display = "none";
+    container.style.display = "flex";
     carregarLista(listaSalvaUrl);
-  }else{ alert("Senha incorreta!"); }
+  } else { alert("Senha incorreta!"); }
 };
 window.onload = () => {
   const savedSenha = localStorage.getItem("iptv_password");
-  if(senhasValidas.includes(savedSenha)){
-    senhaSection.style.display="none";
-    container.style.display="flex";
+  if (senhasValidas.includes(savedSenha)) {
+    senhaSection.style.display = "none";
+    container.style.display = "flex";
     carregarLista(listaSalvaUrl);
   }
 };
 document.getElementById("testarGratisBtnLogin").onclick = () => {
-  document.getElementById("senhaInput").value="2025";
+  document.getElementById("senhaInput").value = "2025";
   document.getElementById("senhaBtn").click();
 };
 
-// ===== IPTV =====
+// ===== IPTV FUNÇÕES =====
 async function carregarLista(url){
   try{
     const res = await fetch(url);
     const data = await res.text();
     allChannels = parseM3U(data);
     renderCategorias();
-  }catch{ alert("Erro ao carregar lista."); }
+  } catch { alert("Erro ao carregar lista."); }
 }
 function parseM3U(txt){
-  const linhas = txt.split("\n");
-  let canais=[], canal=null;
+  const linhas = txt.split("\n"), canais = [];
+  let canal = null;
   for(let l of linhas){
     l=l.trim();
     if(l.startsWith("#EXTINF")){
-      canal={tvg_name:(l.match(/tvg-name="([^"]+)"/)||["","Sem Nome"])[1],
-             tvg_logo:(l.match(/tvg-logo="([^"]+)"/)||["",""])[1],
-             group_title:(l.match(/group-title="([^"]+)"/)||["","Outros"])[1],
-             url:""};
-    }else if(l && canal){ canal.url=l; canais.push(canal); canal=null; }
+      canal={ tvg_name:(l.match(/tvg-name="([^"]+)"/)||["","Sem Nome"])[1],
+              tvg_logo:(l.match(/tvg-logo="([^"]+)"/)||["",""])[1],
+              group_title:(l.match(/group-title="([^"]+)"/)||["","Outros"])[1],
+              url:"" };
+    } else if(l && canal){ canal.url=l; canais.push(canal); canal=null; }
   }
   return canais;
 }
@@ -153,11 +157,11 @@ function renderCategorias(){
   channelList.innerHTML="";
   categoriasValidas.forEach(cat=>{
     const div=document.createElement("div");
-    div.className="category-label";
-    div.textContent=cat;
+    div.className="category-label"; div.textContent=cat;
     div.onclick=()=>{
       const canais=allChannels.filter(c=>c.group_title===cat);
       canaisAtuais=canais;
+      lastCategory=cat;
       renderChannelList(canais);
     };
     channelList.appendChild(div);
@@ -167,52 +171,59 @@ function renderChannelList(canais){
   rightList.innerHTML="";
   canais.forEach((canal,index)=>{
     const div=document.createElement("div");
-    div.className="channel";
-    div.dataset.index=index;
+    div.className="channel"; div.dataset.index=index;
     div.innerHTML=`<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
                    <button class="favorite-btn ${favorites.includes(canal.tvg_name)?"":"not-fav"}">
                    ${favorites.includes(canal.tvg_name)?"★":"☆"}</button>`;
     div.querySelector("button").onclick=(e)=>{ e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
-    div.onclick=()=>{ playChannel(canal,index); };
+    div.onclick=()=>{
+      currentIndex=index;
+      lastChannelIndex=index;
+      playChannel(canal);
+    };
     rightList.appendChild(div);
   });
 }
+
+// ===== FAVORITOS =====
 function toggleFavorite(name,btn){
   if(favorites.includes(name)) favorites=favorites.filter(n=>n!==name);
   else favorites.push(name);
   localStorage.setItem("favorites",JSON.stringify(favorites));
-  btn.textContent = favorites.includes(name)?"★":"☆";
+  btn.textContent=favorites.includes(name)?"★":"☆";
   btn.classList.toggle("not-fav");
 }
+
+// ===== DETECÇÃO DE TV BOX FRACA =====
 function isWeakBox(){
-  const ua = navigator.userAgent;
-  const lowSpecAndroid = /Android [5-8]/.test(ua);
-  const lowMemory = navigator.deviceMemory && navigator.deviceMemory<2;
-  return lowSpecAndroid || lowMemory;
+  const ua=navigator.userAgent;
+  const lowSpecAndroid=/Android [5-8]/.test(ua);
+  const lowMemory=navigator.deviceMemory && navigator.deviceMemory<2;
+  return lowSpecAndroid||lowMemory;
 }
 
-// ===== PLAY =====
-function playChannel(canal,index=0){
+// ===== PLAYER HÍBRIDO =====
+function playChannel(canal){
   if(!canal.url) return;
-  currentIndex=index; lastChannelIndex=index; lastCategory=canal.group_title;
+  const isHls=canal.url.includes(".m3u8")||canal.url.includes(".mpd");
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  const weakBox=isWeakBox();
 
-  const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
-  const weakBox = isWeakBox();
+  if(isAndroid){
+    const mxIntent=`intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+    const vlcIntent=`intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
+    let opened=false;
+    try{ window.location.href=mxIntent; opened=true; } catch {}
+    setTimeout(()=>{
+      if(!opened){ try{ window.location.href=vlcIntent; opened=true; } catch{} }
+    },500);
+    setTimeout(()=>{ if(!opened) playChannelInternal(canal,isHls,weakBox); },1000);
+    return;
+  }
 
-  const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-  const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
-
-  let externalOpened=false;
-  try{ window.location.href=mxIntent; externalOpened=true; }catch{}
-  setTimeout(()=>{
-    if(!externalOpened){
-      try{ window.location.href=vlcIntent; externalOpened=true; }catch{}
-    }
-  },500);
-  setTimeout(()=>{
-    if(!externalOpened) playChannelInternal(canal,isHls,weakBox);
-  },1000);
+  playChannelInternal(canal,isHls,weakBox);
 }
+
 function playChannelInternal(canal,isHls,weakBox){
   if(clapprPlayer) clapprPlayer.destroy(); clapprPlayer=null;
   const box=document.getElementById("player"); box.innerHTML="";
@@ -224,62 +235,42 @@ function playChannelInternal(canal,isHls,weakBox){
 
   if(weakBox){ video.src=canal.url; video.play().catch(()=>{}); return; }
   if(isHls && video.canPlayType("application/vnd.apple.mpegurl")){ video.src=canal.url; video.play(); return; }
-  if(isHls && Hls.isSupported()){
-    const hls = new Hls({enableWorker:true, lowLatencyMode:true, maxBufferLength:20});
-    hls.loadSource(canal.url);
-    hls.attachMedia(video);
-    return;
-  }
+  if(isHls && Hls.isSupported()){ const hls=new Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:20}); hls.loadSource(canal.url); hls.attachMedia(video); return; }
 
-  clapprPlayer = new Clappr.Player({
-    parentId:"#player",
-    source:canal.url,
-    autoPlay:true,
-    width:"100%",
-    height:"100%",
-    playback:{playInline:true},
-    plugins:[DashShakaPlayback],
-    shakaConfiguration:{streaming:{rebufferingGoal:15,bufferingGoal:20}}
-  });
+  clapprPlayer=new Clappr.Player({ parentId:"#player", source:canal.url, autoPlay:true, width:"100%", height:"100%", playback:{playInline:true}, plugins:[DashShakaPlayback], shakaConfiguration:{streaming:{rebufferingGoal:15,bufferingGoal:20}} });
 }
 
 // ===== CONTROLES =====
-document.getElementById("exitBtn").onclick=()=>{
-  if(clapprPlayer) clapprPlayer.destroy();
-  videoContainer.classList.remove("active");
-
-  if(lastCategory){
-    const catDivs=document.querySelectorAll(".category-label");
-    catDivs.forEach(div=>{
-      if(div.textContent===lastCategory){
-        div.click(); focusType="channel"; focusIndex=lastChannelIndex; applyFocus();
-      }
-    });
-  }
-};
-document.getElementById("prevBtn").onclick=()=>{ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex],currentIndex); };
-document.getElementById("nextBtn").onclick=()=>{ currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex],currentIndex); };
-document.getElementById("fullscreenBtn").onclick=()=>{
-  const playerEl=document.getElementById("player");
-  if(playerEl.requestFullscreen) playerEl.requestFullscreen();
-  else if(playerEl.webkitRequestFullscreen) playerEl.webkitRequestFullscreen();
-  else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen();
-};
+const exitBtn=document.getElementById("exitBtn");
+document.getElementById("exitBtn").onclick=()=>{ if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
+document.getElementById("prevBtn").onclick=()=>{ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; lastChannelIndex=currentIndex; playChannel(allChannels[currentIndex]); };
+document.getElementById("nextBtn").onclick=()=>{ currentIndex=(currentIndex+1)%allChannels.length; lastChannelIndex=currentIndex; playChannel(allChannels[currentIndex]); };
+document.getElementById("fullscreenBtn").onclick=()=>{ const playerEl=document.getElementById("player"); if(playerEl.requestFullscreen) playerEl.requestFullscreen(); else if(playerEl.webkitRequestFullscreen) playerEl.webkitRequestFullscreen(); else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen(); };
 
 // ===== MENU =====
-document.getElementById("btnListaSalva").onclick = ()=> carregarLista(listaSalvaUrl);
-document.getElementById("btnFavoritos").onclick = ()=>{
-  const favChannels = allChannels.filter(c=>favorites.includes(c.tvg_name));
+document.getElementById("btnListaSalva").onclick=()=> carregarLista(listaSalvaUrl);
+document.getElementById("btnFavoritos").onclick=()=>{
+  const favChannels=allChannels.filter(c=>favorites.includes(c.tvg_name));
   canaisAtuais=favChannels;
   renderChannelList(favChannels);
 };
 
-// ===== NAVEGAÇÃO REMOTA =====
+// ===== NAVEGAÇÃO REMOTA COM SCROLL =====
 let focusIndex=0, focusType="category";
 function applyFocus(){
   document.querySelectorAll(".focused").forEach(el=>el.classList.remove("focused"));
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
+  let el=null;
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); el=cats[focusIndex]; }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); el=ch[focusIndex]; }
+  if(el){ el.classList.add("focused"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+}
+function selectFocused(){
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
+}
+function moveFocus(dir){
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0,Math.min(cats.length-1,focusIndex+dir)); applyFocus(); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0,Math.min(ch.length-1,focusIndex+dir)); applyFocus(); }
 }
 document.addEventListener("keydown",(e)=>{
   const key=e.key;
@@ -288,17 +279,25 @@ document.addEventListener("keydown",(e)=>{
   if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
   if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
   if(key==="Enter") selectFocused();
-  if(key==="Backspace"||key==="Escape"){ if(videoContainer.classList.contains("active")) exitBtn.click(); focusType="channel"; applyFocus(); }
+  if(key==="Backspace"||key==="Escape"){
+    if(videoContainer.classList.contains("active")){
+      exitBtn.click();
+      focusType="channel";
+      if(lastCategory){
+        const cats=document.querySelectorAll(".category-label");
+        const catDiv = Array.from(cats).find(d=>d.textContent===lastCategory);
+        if(catDiv){
+          const catIndex = Array.from(cats).indexOf(catDiv);
+          focusType="category"; focusIndex=catIndex; applyFocus();
+          catDiv.click();
+          setTimeout(()=>{
+            focusType="channel"; focusIndex=lastChannelIndex; applyFocus();
+          },100);
+        }
+      }
+    }
+  }
 });
-function moveFocus(dir){
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0,Math.min(cats.length-1,focusIndex+dir)); applyFocus(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0,Math.min(ch.length-1,focusIndex+dir)); applyFocus(); }
-}
-function selectFocused(){
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
-}
-applyFocus();
 </script>
 
 </body>
