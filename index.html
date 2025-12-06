@@ -3,20 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Site em Teste</title>
+<title>IPTV Teste</title>
 
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="https://i.imgur.com/jFQiZvL.jpeg">
 <link rel="apple-touch-icon" href="https://i.imgur.com/jFQiZvL.jpeg">
 <meta name="theme-color" content="#1e90ff">
-
-<script>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js")
-    .then(() => console.log("SW registrado"))
-    .catch(err => console.error("Erro SW:", err));
-}
-</script>
 
 <script src="https://cdn.jsdelivr.net/npm/clappr@latest/dist/clappr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -24,7 +16,6 @@ if ("serviceWorker" in navigator) {
 <script src="https://cdn.jsdelivr.net/gh/clappr/dash-shaka-playback/dist/dash-shaka-playback.min.js"></script>
 
 <style>
-/* ==================== Estilos ==================== */
 body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-serif; color:#fff; overflow:hidden; }
 #topBar { position:fixed; top:0; left:0; height:60px; width:100%; background:#000000aa; display:flex; align-items:center; padding:0 15px; justify-content:space-between; z-index:10000; backdrop-filter: blur(4px); font-size:15px; }
 #senhaSection { height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; text-align:center; padding:20px; gap:15px; overflow-y:auto; }
@@ -49,11 +40,12 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 #player { width:100%; height:100%; }
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
+.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03); }
 </style>
 </head>
 <body>
 
-<!-- TELA DE LOGIN -->
+<!-- LOGIN -->
 <div id="senhaSection">
   <div style="max-width:480px; background:#111; padding:15px; border-radius:12px; box-shadow:0 0 12px rgba(0,0,0,0.7); color:#fff; line-height:1.4; font-size:13px;">
     <h2 style="color:#1e90ff; text-align:center; margin-bottom:10px; font-size:18px;">Bem-vindo!</h2>
@@ -68,7 +60,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   </div>
 </div>
 
-<!-- CONTAINER PRINCIPAL IPTV -->
+<!-- CONTAINER IPTV -->
 <div class="container">
   <div class="sidebar">
     <div class="top-buttons">
@@ -96,10 +88,13 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
 const categoriasValidas = ['Classic','Series','Kids','Religioso','Variedade','TESTE','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
+
 let allChannels = [];
-let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+let favorites = JSON.parse(localStorage.getItem("favorites")||"[]");
 let currentIndex = 0;
 let canaisAtuais = [];
+let lastCategory = null;
+let lastChannelIndex = 0;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
@@ -108,198 +103,185 @@ const rightList = document.getElementById("channelListRight");
 const videoContainer = document.getElementById("videoContainer");
 let clapprPlayer = null;
 
-// ==================== LOGIN ====================
+// ===== LOGIN =====
 document.getElementById("senhaBtn").onclick = () => {
   const senha = document.getElementById("senhaInput").value;
-  if (senhasValidas.includes(senha)) {
-    localStorage.setItem("iptv_password", senha);
-    senhaSection.style.display = "none";
-    container.style.display = "flex";
+  if(senhasValidas.includes(senha)){
+    localStorage.setItem("iptv_password",senha);
+    senhaSection.style.display="none";
+    container.style.display="flex";
     carregarLista(listaSalvaUrl);
-  } else { alert("Senha incorreta!"); }
+  }else{ alert("Senha incorreta!"); }
 };
 window.onload = () => {
   const savedSenha = localStorage.getItem("iptv_password");
-  if (senhasValidas.includes(savedSenha)) {
-    senhaSection.style.display = "none";
-    container.style.display = "flex";
+  if(senhasValidas.includes(savedSenha)){
+    senhaSection.style.display="none";
+    container.style.display="flex";
     carregarLista(listaSalvaUrl);
   }
 };
 document.getElementById("testarGratisBtnLogin").onclick = () => {
-  document.getElementById("senhaInput").value = "2025";
+  document.getElementById("senhaInput").value="2025";
   document.getElementById("senhaBtn").click();
 };
 
-// ==================== IPTV Funções ====================
-async function carregarLista(url) {
-  try {
+// ===== IPTV =====
+async function carregarLista(url){
+  try{
     const res = await fetch(url);
     const data = await res.text();
     allChannels = parseM3U(data);
     renderCategorias();
-  } catch { alert("Erro ao carregar lista."); }
+  }catch{ alert("Erro ao carregar lista."); }
 }
-function parseM3U(txt) {
+function parseM3U(txt){
   const linhas = txt.split("\n");
-  let canais = [];
-  let canal = null;
-  for (let l of linhas) {
-    l = l.trim();
-    if (l.startsWith("#EXTINF")) {
-      canal = { tvg_name: (l.match(/tvg-name="([^"]+)"/) || ["", "Sem Nome"])[1],
-                tvg_logo: (l.match(/tvg-logo="([^"]+)"/) || ["", ""])[1],
-                group_title: (l.match(/group-title="([^"]+)"/) || ["", "Outros"])[1],
-                url: "" };
-    } else if (l && canal) { canal.url = l; canais.push(canal); canal=null; }
+  let canais=[], canal=null;
+  for(let l of linhas){
+    l=l.trim();
+    if(l.startsWith("#EXTINF")){
+      canal={tvg_name:(l.match(/tvg-name="([^"]+)"/)||["","Sem Nome"])[1],
+             tvg_logo:(l.match(/tvg-logo="([^"]+)"/)||["",""])[1],
+             group_title:(l.match(/group-title="([^"]+)"/)||["","Outros"])[1],
+             url:""};
+    }else if(l && canal){ canal.url=l; canais.push(canal); canal=null; }
   }
   return canais;
 }
-function renderCategorias() {
-  channelList.innerHTML = "";
-  categoriasValidas.forEach(cat => {
-    const div = document.createElement("div");
-    div.className = "category-label";
-    div.textContent = cat;
-    div.onclick = () => {
-      const canais = allChannels.filter(c => c.group_title === cat);
-      canaisAtuais = canais;
+function renderCategorias(){
+  channelList.innerHTML="";
+  categoriasValidas.forEach(cat=>{
+    const div=document.createElement("div");
+    div.className="category-label";
+    div.textContent=cat;
+    div.onclick=()=>{
+      const canais=allChannels.filter(c=>c.group_title===cat);
+      canaisAtuais=canais;
       renderChannelList(canais);
     };
     channelList.appendChild(div);
   });
 }
-function renderChannelList(canais) {
-  rightList.innerHTML = "";
-  canais.forEach((canal, index) => {
-    const div = document.createElement("div");
-    div.className = "channel";
-    div.dataset.index = index;
-    div.innerHTML = `<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
-                     <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
-                     ${favorites.includes(canal.tvg_name) ? "★" : "☆"}</button>`;
-    div.querySelector("button").onclick = (e) => { e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
-    div.onclick = () => { currentIndex=index; playChannel(canal); };
+function renderChannelList(canais){
+  rightList.innerHTML="";
+  canais.forEach((canal,index)=>{
+    const div=document.createElement("div");
+    div.className="channel";
+    div.dataset.index=index;
+    div.innerHTML=`<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
+                   <button class="favorite-btn ${favorites.includes(canal.tvg_name)?"":"not-fav"}">
+                   ${favorites.includes(canal.tvg_name)?"★":"☆"}</button>`;
+    div.querySelector("button").onclick=(e)=>{ e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
+    div.onclick=()=>{ playChannel(canal,index); };
     rightList.appendChild(div);
   });
 }
-function toggleFavorite(name, btn) {
+function toggleFavorite(name,btn){
   if(favorites.includes(name)) favorites=favorites.filter(n=>n!==name);
   else favorites.push(name);
-  localStorage.setItem("favorites", JSON.stringify(favorites));
+  localStorage.setItem("favorites",JSON.stringify(favorites));
   btn.textContent = favorites.includes(name)?"★":"☆";
   btn.classList.toggle("not-fav");
 }
-
-// ==================== DETECÇÃO DE TV BOX FRACA ====================
-function isWeakBox() {
+function isWeakBox(){
   const ua = navigator.userAgent;
   const lowSpecAndroid = /Android [5-8]/.test(ua);
-  const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 2;
+  const lowMemory = navigator.deviceMemory && navigator.deviceMemory<2;
   return lowSpecAndroid || lowMemory;
 }
 
-// ==================== FUNÇÃO HYBRID PLAY ====================
-function playChannel(canal) {
-  if (!canal.url) return;
+// ===== PLAY =====
+function playChannel(canal,index=0){
+  if(!canal.url) return;
+  currentIndex=index; lastChannelIndex=index; lastCategory=canal.group_title;
 
   const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
   const weakBox = isWeakBox();
 
-  // Prioridade: MXPlayer → VLC → player interno
   const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
   const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
 
-  let externalOpened = false;
-
-  // Tenta abrir MXPlayer
-  try { window.location.href = mxIntent; externalOpened = true; } catch {}
-
-  // Se MXPlayer não abrir, tenta VLC após 500ms
-  setTimeout(() => {
-    if (!externalOpened) {
-      try { window.location.href = vlcIntent; externalOpened = true; } catch {}
+  let externalOpened=false;
+  try{ window.location.href=mxIntent; externalOpened=true; }catch{}
+  setTimeout(()=>{
+    if(!externalOpened){
+      try{ window.location.href=vlcIntent; externalOpened=true; }catch{}
     }
-  }, 500);
-
-  // Se nenhum externo abrir, usar player interno após 1000ms
-  setTimeout(() => {
-    if (!externalOpened) playChannelInternal(canal, isHls, weakBox);
-  }, 1000);
+  },500);
+  setTimeout(()=>{
+    if(!externalOpened) playChannelInternal(canal,isHls,weakBox);
+  },1000);
 }
-
-function playChannelInternal(canal, isHls, weakBox) {
-  if (clapprPlayer) clapprPlayer.destroy();
-  clapprPlayer = null;
-
-  const box = document.getElementById("player");
-  box.innerHTML = "";
+function playChannelInternal(canal,isHls,weakBox){
+  if(clapprPlayer) clapprPlayer.destroy(); clapprPlayer=null;
+  const box=document.getElementById("player"); box.innerHTML="";
   videoContainer.classList.add("active");
 
-  const video = document.createElement("video");
-  video.controls = true;
-  video.autoplay = true;
-  video.style.width = "100%";
-  video.style.height = "100%";
-  video.playsInline = true;
+  const video=document.createElement("video");
+  video.controls=true; video.autoplay=true; video.style.width="100%"; video.style.height="100%"; video.playsInline=true;
   box.appendChild(video);
 
-  if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); return; }
-
-  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
-  if (isHls && Hls.isSupported()) {
-    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
+  if(weakBox){ video.src=canal.url; video.play().catch(()=>{}); return; }
+  if(isHls && video.canPlayType("application/vnd.apple.mpegurl")){ video.src=canal.url; video.play(); return; }
+  if(isHls && Hls.isSupported()){
+    const hls = new Hls({enableWorker:true, lowLatencyMode:true, maxBufferLength:20});
     hls.loadSource(canal.url);
     hls.attachMedia(video);
     return;
   }
 
   clapprPlayer = new Clappr.Player({
-    parentId: "#player",
-    source: canal.url,
-    autoPlay: true,
-    width: "100%",
-    height: "100%",
-    playback: { playInline: true },
-    plugins: [DashShakaPlayback],
-    shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
+    parentId:"#player",
+    source:canal.url,
+    autoPlay:true,
+    width:"100%",
+    height:"100%",
+    playback:{playInline:true},
+    plugins:[DashShakaPlayback],
+    shakaConfiguration:{streaming:{rebufferingGoal:15,bufferingGoal:20}}
   });
 }
 
-// ==================== CONTROLES ====================
-document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
-document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
-document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
-document.getElementById("fullscreenBtn").onclick = () => {
+// ===== CONTROLES =====
+document.getElementById("exitBtn").onclick=()=>{
+  if(clapprPlayer) clapprPlayer.destroy();
+  videoContainer.classList.remove("active");
+
+  if(lastCategory){
+    const catDivs=document.querySelectorAll(".category-label");
+    catDivs.forEach(div=>{
+      if(div.textContent===lastCategory){
+        div.click(); focusType="channel"; focusIndex=lastChannelIndex; applyFocus();
+      }
+    });
+  }
+};
+document.getElementById("prevBtn").onclick=()=>{ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex],currentIndex); };
+document.getElementById("nextBtn").onclick=()=>{ currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex],currentIndex); };
+document.getElementById("fullscreenBtn").onclick=()=>{
   const playerEl=document.getElementById("player");
   if(playerEl.requestFullscreen) playerEl.requestFullscreen();
   else if(playerEl.webkitRequestFullscreen) playerEl.webkitRequestFullscreen();
   else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen();
 };
 
-// ==================== MENU ====================
-document.getElementById("btnListaSalva").onclick = () => carregarLista(listaSalvaUrl);
-document.getElementById("btnFavoritos").onclick = () => {
-  const favChannels = allChannels.filter(c => favorites.includes(c.tvg_name));
-  canaisAtuais = favChannels;
+// ===== MENU =====
+document.getElementById("btnListaSalva").onclick = ()=> carregarLista(listaSalvaUrl);
+document.getElementById("btnFavoritos").onclick = ()=>{
+  const favChannels = allChannels.filter(c=>favorites.includes(c.tvg_name));
+  canaisAtuais=favChannels;
   renderChannelList(favChannels);
 };
 
-// ==================== NAVEGAÇÃO REMOTA ====================
-let focusIndex = 0;
-let focusType = "category";
-
-function applyFocus() {
-  document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
-  if(focusType==="category") { const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); }
-  else if(focusType==="channel") { const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
+// ===== NAVEGAÇÃO REMOTA =====
+let focusIndex=0, focusType="category";
+function applyFocus(){
+  document.querySelectorAll(".focused").forEach(el=>el.classList.remove("focused"));
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
 }
-
-const css = document.createElement("style");
-css.innerHTML = `.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);} `;
-document.head.appendChild(css);
-
-document.addEventListener("keydown", (e) => {
+document.addEventListener("keydown",(e)=>{
   const key=e.key;
   if(key==="ArrowDown") moveFocus(1);
   if(key==="ArrowUp") moveFocus(-1);
@@ -308,14 +290,12 @@ document.addEventListener("keydown", (e) => {
   if(key==="Enter") selectFocused();
   if(key==="Backspace"||key==="Escape"){ if(videoContainer.classList.contains("active")) exitBtn.click(); focusType="channel"; applyFocus(); }
 });
-
-function moveFocus(dir) {
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0, Math.min(cats.length-1, focusIndex+dir)); applyFocus(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0, Math.min(ch.length-1, focusIndex+dir)); applyFocus(); }
+function moveFocus(dir){
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0,Math.min(cats.length-1,focusIndex+dir)); applyFocus(); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0,Math.min(ch.length-1,focusIndex+dir)); applyFocus(); }
 }
-
-function selectFocused() {
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); focusType="channel"; focusIndex=0; applyFocus(); }
+function selectFocused(){
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); }
   else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
 }
 applyFocus();
