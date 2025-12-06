@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -50,6 +49,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 #player { width:100%; height:100%; }
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
+.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);}
 </style>
 </head>
 <body>
@@ -245,30 +245,44 @@ function playChannelInternal(canal, isHls, weakBox) {
   video.playsInline = true;
   box.appendChild(video);
 
-  if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); return; }
-
-  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
-  if (isHls && Hls.isSupported()) {
-    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
-    hls.loadSource(canal.url);
-    hls.attachMedia(video);
-    return;
+  if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); } 
+  else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); } 
+  else if (isHls && Hls.isSupported()) { const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 }); hls.loadSource(canal.url); hls.attachMedia(video); video.play(); } 
+  else { 
+    clapprPlayer = new Clappr.Player({
+      parentId: "#player",
+      source: canal.url,
+      autoPlay: true,
+      width: "100%",
+      height: "100%",
+      playback: { playInline: true },
+      plugins: [DashShakaPlayback],
+      shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
+    }); 
   }
 
-  clapprPlayer = new Clappr.Player({
-    parentId: "#player",
-    source: canal.url,
-    autoPlay: true,
-    width: "100%",
-    height: "100%",
-    playback: { playInline: true },
-    plugins: [DashShakaPlayback],
-    shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
-  });
+  // FULLSCREEN AUTOMÁTICO
+  setTimeout(() => {
+    if (video.requestFullscreen) video.requestFullscreen();
+    else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+    else if (video.msRequestFullscreen) video.msRequestFullscreen();
+
+    // FOCO AUTOMÁTICO NO PLAYER
+    focusType = "player";
+    applyFocus();
+  }, 500);
 }
 
 // ==================== CONTROLES ====================
-document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
+document.getElementById("exitBtn").onclick = () => {
+  if(clapprPlayer) clapprPlayer.destroy();
+  videoContainer.classList.remove("active");
+
+  // Mantém foco no canal selecionado
+  focusType = "channel";
+  focusIndex = currentIndex;
+  applyFocus();
+};
 document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("fullscreenBtn").onclick = () => {
@@ -288,7 +302,7 @@ document.getElementById("btnFavoritos").onclick = () => {
 
 // ==================== NAVEGAÇÃO REMOTA ====================
 let focusIndex = 0;
-let focusType = "category";
+let focusType = "category"; // category, channel, player
 
 function applyFocus() {
   document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
@@ -296,18 +310,26 @@ function applyFocus() {
   else if(focusType==="channel") { const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
 }
 
-const css = document.createElement("style");
-css.innerHTML = `.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);} `;
-document.head.appendChild(css);
-
 document.addEventListener("keydown", (e) => {
   const key=e.key;
-  if(key==="ArrowDown") moveFocus(1);
-  if(key==="ArrowUp") moveFocus(-1);
-  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
-  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
-  if(key==="Enter") selectFocused();
-  if(key==="Backspace"||key==="Escape"){ if(videoContainer.classList.contains("active")) exitBtn.click(); focusType="channel"; applyFocus(); }
+
+  if(focusType==="category" || focusType==="channel") {
+    if(key==="ArrowDown") moveFocus(1);
+    if(key==="ArrowUp") moveFocus(-1);
+    if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
+    if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
+    if(key==="Enter") selectFocused();
+  }
+
+  if(focusType==="player") {
+    if(key==="ArrowRight") document.getElementById("nextBtn").click();
+    if(key==="ArrowLeft") document.getElementById("prevBtn").click();
+    if(key==="Backspace" || key==="Escape") document.getElementById("exitBtn").click();
+    if(key==="Enter") {
+      const video=document.querySelector("#player video");
+      if(video){ if(video.paused) video.play(); else video.pause(); }
+    }
+  }
 });
 
 function moveFocus(dir) {
