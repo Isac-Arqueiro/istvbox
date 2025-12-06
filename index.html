@@ -20,10 +20,9 @@ if ("serviceWorker" in navigator) {
 
 <script src="https://cdn.jsdelivr.net/npm/clappr@latest/dist/clappr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<script src="https://cdn.jsdelivr.net/npm/shaka-player@latest/dist/shaka-player.compiled.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/clappr/dash-shaka-playback/dist/dash-shaka-playback.min.js"></script>
 
 <style>
+/* ==================== Estilos ==================== */
 body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-serif; color:#fff; overflow:hidden; }
 #topBar { position:fixed; top:0; left:0; height:60px; width:100%; background:#000000aa; display:flex; align-items:center; padding:0 15px; justify-content:space-between; z-index:10000; backdrop-filter: blur(4px); font-size:15px; }
 #senhaSection { height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; text-align:center; padding:20px; gap:15px; overflow-y:auto; }
@@ -48,7 +47,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 #player { width:100%; height:100%; }
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
-.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);}
+.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03); }
 </style>
 </head>
 <body>
@@ -100,8 +99,8 @@ let allChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let currentIndex = 0;
 let canaisAtuais = [];
-let lastCategory = null;
-let lastChannelIndex = null;
+let lastCategoryIndex = 0;
+let lastChannelIndex = 0;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
@@ -140,20 +139,6 @@ async function carregarLista(url) {
     const data = await res.text();
     allChannels = parseM3U(data);
     renderCategorias();
-    // Retornar ao último canal
-    const savedCategory = localStorage.getItem("lastCategory");
-    const savedIndex = parseInt(localStorage.getItem("lastChannelIndex"));
-    if(savedCategory && !isNaN(savedIndex)){
-      const catDiv = Array.from(document.querySelectorAll(".category-label"))
-                        .find(d=>d.textContent===savedCategory);
-      if(catDiv){
-        focusType="category"; focusIndex=Array.from(document.querySelectorAll(".category-label")).indexOf(catDiv);
-        catDiv.click();
-        setTimeout(()=>{
-          focusType="channel"; focusIndex=savedIndex; applyFocus();
-        },100);
-      }
-    }
   } catch { alert("Erro ao carregar lista."); }
 }
 function parseM3U(txt) {
@@ -173,14 +158,15 @@ function parseM3U(txt) {
 }
 function renderCategorias() {
   channelList.innerHTML = "";
-  categoriasValidas.forEach(cat => {
+  categoriasValidas.forEach((cat, idx) => {
     const div = document.createElement("div");
     div.className = "category-label";
     div.textContent = cat;
+    div.dataset.idx = idx;
     div.onclick = () => {
+      lastCategoryIndex = idx;
       const canais = allChannels.filter(c => c.group_title === cat);
       canaisAtuais = canais;
-      lastCategory = cat;
       renderChannelList(canais);
     };
     channelList.appendChild(div);
@@ -196,15 +182,13 @@ function renderChannelList(canais) {
                      <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
                      ${favorites.includes(canal.tvg_name) ? "★" : "☆"}</button>`;
     div.querySelector("button").onclick = (e) => { e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
-    div.onclick = () => { 
-      currentIndex=index; 
-      lastChannelIndex = index;
-      localStorage.setItem("lastCategory", lastCategory);
-      localStorage.setItem("lastChannelIndex", lastChannelIndex);
-      playChannel(canal); 
-    };
+    div.onclick = () => { currentIndex=index; lastChannelIndex=index; playChannel(canal); };
     rightList.appendChild(div);
   });
+  // Restaurar último canal da categoria
+  if(lastChannelIndex < canais.length) {
+    rightList.children[lastChannelIndex].scrollIntoView({behavior:"auto",block:"center"});
+  }
 }
 function toggleFavorite(name, btn) {
   if(favorites.includes(name)) favorites=favorites.filter(n=>n!==name);
@@ -214,39 +198,29 @@ function toggleFavorite(name, btn) {
   btn.classList.toggle("not-fav");
 }
 
-// ==================== DETECÇÃO DE TV BOX FRACA ====================
-function isWeakBox() {
-  const ua = navigator.userAgent;
-  const lowSpecAndroid = /Android [5-8]/.test(ua);
-  const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 2;
-  return lowSpecAndroid || lowMemory;
-}
-
-// ==================== FUNÇÃO HYBRID PLAY ====================
-function playChannel(canal){
-  if(!canal.url) return;
+// ==================== FUNÇÃO DE PLAY ====================
+function playChannel(canal) {
+  if (!canal.url) return;
   const isAndroid = /Android/i.test(navigator.userAgent);
-  if(isAndroid){
-    const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
-    let opened = false;
 
-    try { window.location.href = mxIntent; opened = true; } catch {}
-    setTimeout(() => { if(!opened){ try { window.location.href = vlcIntent; opened = true; } catch {} } }, 500);
-    setTimeout(() => { if(!opened){ playChannelInternal(canal); } }, 1000);
+  if (isAndroid) {
+    // Sempre abrir MX Player no Android
+    const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+    try { window.location.href = mxIntent; } 
+    catch (err) { alert("Não foi possível abrir o MX Player."); }
     return;
   }
+
+  // Outros dispositivos usam player interno
   playChannelInternal(canal);
 }
 
 function playChannelInternal(canal) {
   if (clapprPlayer) clapprPlayer.destroy();
   clapprPlayer = null;
-
   const box = document.getElementById("player");
   box.innerHTML = "";
   videoContainer.classList.add("active");
-
   const video = document.createElement("video");
   video.controls = true;
   video.autoplay = true;
@@ -255,34 +229,33 @@ function playChannelInternal(canal) {
   video.playsInline = true;
   box.appendChild(video);
 
-  if (isWeakBox()) { video.src = canal.url; video.play().catch(()=>{}); return; }
-
-  const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
-
-  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
-  if (isHls && Hls.isSupported()) {
-    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
+  if(Hls.isSupported() && canal.url.includes(".m3u8")){
+    const hls = new Hls({enableWorker:true,lowLatencyMode:true});
     hls.loadSource(canal.url);
     hls.attachMedia(video);
-    return;
+  } else {
+    video.src = canal.url;
+    video.play().catch(()=>{});
   }
-
-  clapprPlayer = new Clappr.Player({
-    parentId: "#player",
-    source: canal.url,
-    autoPlay: true,
-    width: "100%",
-    height: "100%",
-    playback: { playInline: true },
-    plugins: [DashShakaPlayback],
-    shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
-  });
 }
 
 // ==================== CONTROLES ====================
-document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
-document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
-document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
+document.getElementById("exitBtn").onclick = () => { 
+  if(clapprPlayer) clapprPlayer.destroy(); 
+  videoContainer.classList.remove("active"); 
+  renderCategorias(); // voltar para categoria
+  renderChannelList(canaisAtuais); // restaurar último canal
+};
+document.getElementById("prevBtn").onclick = () => { 
+  currentIndex=(currentIndex-1+canaisAtuais.length)%canaisAtuais.length; 
+  lastChannelIndex=currentIndex;
+  playChannel(canaisAtuais[currentIndex]); 
+};
+document.getElementById("nextBtn").onclick = () => { 
+  currentIndex=(currentIndex+1)%canaisAtuais.length; 
+  lastChannelIndex=currentIndex;
+  playChannel(canaisAtuais[currentIndex]); 
+};
 document.getElementById("fullscreenBtn").onclick = () => {
   const playerEl=document.getElementById("player");
   if(playerEl.requestFullscreen) playerEl.requestFullscreen();
@@ -304,30 +277,47 @@ let focusType = "category";
 
 function applyFocus() {
   document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) { cats[focusIndex].classList.add("focused"); cats[focusIndex].scrollIntoView({block:"center"}); } }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) { ch[focusIndex].classList.add("focused"); ch[focusIndex].scrollIntoView({block:"center"}); } }
+  if(focusType==="category"){ 
+    const cats=document.querySelectorAll(".category-label"); 
+    if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); 
+    cats[focusIndex]?.scrollIntoView({block:"center"});
+  } else if(focusType==="channel"){ 
+    const ch=document.querySelectorAll(".channel"); 
+    if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); 
+    ch[focusIndex]?.scrollIntoView({block:"center"});
+  }
 }
 
 document.addEventListener("keydown", (e) => {
   const key=e.key;
   if(key==="ArrowDown") moveFocus(1);
   if(key==="ArrowUp") moveFocus(-1);
-  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; } else nextChannel(); }
-  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; } else prevChannel(); }
+  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; } }
+  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=lastCategoryIndex; } }
   if(key==="Enter") selectFocus();
+  if(key==="Backspace"||key==="Escape"){ if(videoContainer.classList.contains("active")) exitBtn.click(); focusType="channel"; }
   applyFocus();
 });
 
 function moveFocus(dir){
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=(focusIndex+dir+cats.length)%cats.length; }
-  else if(focusType==="channel"){ const chs=document.querySelectorAll(".channel"); focusIndex=(focusIndex+dir+chs.length)%chs.length; }
+  if(focusType==="category"){ 
+    const cats=document.querySelectorAll(".category-label"); 
+    focusIndex=(focusIndex+dir+cats.length)%cats.length; 
+  } else if(focusType==="channel"){ 
+    const chs=document.querySelectorAll(".channel"); 
+    focusIndex=(focusIndex+dir+chs.length)%chs.length; 
+  }
 }
 function selectFocus(){
-  if(focusType==="category"){ document.querySelectorAll(".category-label")[focusIndex].click(); focusType="channel"; focusIndex=0; applyFocus(); }
-  else if(focusType==="channel"){ document.querySelectorAll(".channel")[focusIndex].click(); }
+  if(focusType==="category"){ 
+    document.querySelectorAll(".category-label")[focusIndex].click(); 
+    focusType="channel"; 
+    focusIndex=lastChannelIndex || 0; 
+    applyFocus();
+  } else if(focusType==="channel"){ 
+    document.querySelectorAll(".channel")[focusIndex].click(); 
+  }
 }
-function nextChannel(){ currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); }
-function prevChannel(){ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); }
 
 </script>
 
