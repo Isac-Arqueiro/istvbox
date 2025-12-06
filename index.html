@@ -48,7 +48,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 #player { width:100%; height:100%; }
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
-.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03); }
+.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);}
 </style>
 </head>
 <body>
@@ -96,9 +96,12 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
 const categoriasValidas = ['Classic','Series','Kids','Religioso','Variedade','TESTE','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
-let allChannels = [], favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
-let currentIndex = 0, canaisAtuais = [];
-let lastCategory = null, lastChannelIndex = 0;
+let allChannels = [];
+let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+let currentIndex = 0;
+let canaisAtuais = [];
+let lastCategory = null;
+let lastChannelIndex = null;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
@@ -107,7 +110,7 @@ const rightList = document.getElementById("channelListRight");
 const videoContainer = document.getElementById("videoContainer");
 let clapprPlayer = null;
 
-// ===== LOGIN =====
+// ==================== LOGIN ====================
 document.getElementById("senhaBtn").onclick = () => {
   const senha = document.getElementById("senhaInput").value;
   if (senhasValidas.includes(senha)) {
@@ -130,174 +133,202 @@ document.getElementById("testarGratisBtnLogin").onclick = () => {
   document.getElementById("senhaBtn").click();
 };
 
-// ===== IPTV FUNÇÕES =====
-async function carregarLista(url){
-  try{
+// ==================== IPTV Funções ====================
+async function carregarLista(url) {
+  try {
     const res = await fetch(url);
     const data = await res.text();
     allChannels = parseM3U(data);
     renderCategorias();
+    // Retornar ao último canal
+    const savedCategory = localStorage.getItem("lastCategory");
+    const savedIndex = parseInt(localStorage.getItem("lastChannelIndex"));
+    if(savedCategory && !isNaN(savedIndex)){
+      const catDiv = Array.from(document.querySelectorAll(".category-label"))
+                        .find(d=>d.textContent===savedCategory);
+      if(catDiv){
+        focusType="category"; focusIndex=Array.from(document.querySelectorAll(".category-label")).indexOf(catDiv);
+        catDiv.click();
+        setTimeout(()=>{
+          focusType="channel"; focusIndex=savedIndex; applyFocus();
+        },100);
+      }
+    }
   } catch { alert("Erro ao carregar lista."); }
 }
-function parseM3U(txt){
-  const linhas = txt.split("\n"), canais = [];
+function parseM3U(txt) {
+  const linhas = txt.split("\n");
+  let canais = [];
   let canal = null;
-  for(let l of linhas){
-    l=l.trim();
-    if(l.startsWith("#EXTINF")){
-      canal={ tvg_name:(l.match(/tvg-name="([^"]+)"/)||["","Sem Nome"])[1],
-              tvg_logo:(l.match(/tvg-logo="([^"]+)"/)||["",""])[1],
-              group_title:(l.match(/group-title="([^"]+)"/)||["","Outros"])[1],
-              url:"" };
-    } else if(l && canal){ canal.url=l; canais.push(canal); canal=null; }
+  for (let l of linhas) {
+    l = l.trim();
+    if (l.startsWith("#EXTINF")) {
+      canal = { tvg_name: (l.match(/tvg-name="([^"]+)"/) || ["", "Sem Nome"])[1],
+                tvg_logo: (l.match(/tvg-logo="([^"]+)"/) || ["", ""])[1],
+                group_title: (l.match(/group-title="([^"]+)"/) || ["", "Outros"])[1],
+                url: "" };
+    } else if (l && canal) { canal.url = l; canais.push(canal); canal=null; }
   }
   return canais;
 }
-function renderCategorias(){
-  channelList.innerHTML="";
-  categoriasValidas.forEach(cat=>{
-    const div=document.createElement("div");
-    div.className="category-label"; div.textContent=cat;
-    div.onclick=()=>{
-      const canais=allChannels.filter(c=>c.group_title===cat);
-      canaisAtuais=canais;
-      lastCategory=cat;
+function renderCategorias() {
+  channelList.innerHTML = "";
+  categoriasValidas.forEach(cat => {
+    const div = document.createElement("div");
+    div.className = "category-label";
+    div.textContent = cat;
+    div.onclick = () => {
+      const canais = allChannels.filter(c => c.group_title === cat);
+      canaisAtuais = canais;
+      lastCategory = cat;
       renderChannelList(canais);
     };
     channelList.appendChild(div);
   });
 }
-function renderChannelList(canais){
-  rightList.innerHTML="";
-  canais.forEach((canal,index)=>{
-    const div=document.createElement("div");
-    div.className="channel"; div.dataset.index=index;
-    div.innerHTML=`<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
-                   <button class="favorite-btn ${favorites.includes(canal.tvg_name)?"":"not-fav"}">
-                   ${favorites.includes(canal.tvg_name)?"★":"☆"}</button>`;
-    div.querySelector("button").onclick=(e)=>{ e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
-    div.onclick=()=>{
-      currentIndex=index;
-      lastChannelIndex=index;
-      playChannel(canal);
+function renderChannelList(canais) {
+  rightList.innerHTML = "";
+  canais.forEach((canal, index) => {
+    const div = document.createElement("div");
+    div.className = "channel";
+    div.dataset.index = index;
+    div.innerHTML = `<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
+                     <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
+                     ${favorites.includes(canal.tvg_name) ? "★" : "☆"}</button>`;
+    div.querySelector("button").onclick = (e) => { e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
+    div.onclick = () => { 
+      currentIndex=index; 
+      lastChannelIndex = index;
+      localStorage.setItem("lastCategory", lastCategory);
+      localStorage.setItem("lastChannelIndex", lastChannelIndex);
+      playChannel(canal); 
     };
     rightList.appendChild(div);
   });
 }
-
-// ===== FAVORITOS =====
-function toggleFavorite(name,btn){
+function toggleFavorite(name, btn) {
   if(favorites.includes(name)) favorites=favorites.filter(n=>n!==name);
   else favorites.push(name);
-  localStorage.setItem("favorites",JSON.stringify(favorites));
-  btn.textContent=favorites.includes(name)?"★":"☆";
+  localStorage.setItem("favorites", JSON.stringify(favorites));
+  btn.textContent = favorites.includes(name)?"★":"☆";
   btn.classList.toggle("not-fav");
 }
 
-// ===== DETECÇÃO DE TV BOX FRACA =====
-function isWeakBox(){
-  const ua=navigator.userAgent;
-  const lowSpecAndroid=/Android [5-8]/.test(ua);
-  const lowMemory=navigator.deviceMemory && navigator.deviceMemory<2;
-  return lowSpecAndroid||lowMemory;
+// ==================== DETECÇÃO DE TV BOX FRACA ====================
+function isWeakBox() {
+  const ua = navigator.userAgent;
+  const lowSpecAndroid = /Android [5-8]/.test(ua);
+  const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 2;
+  return lowSpecAndroid || lowMemory;
 }
 
-// ===== PLAYER HÍBRIDO =====
+// ==================== FUNÇÃO HYBRID PLAY ====================
 function playChannel(canal){
   if(!canal.url) return;
-  const isHls=canal.url.includes(".m3u8")||canal.url.includes(".mpd");
-  const isAndroid=/Android/i.test(navigator.userAgent);
-  const weakBox=isWeakBox();
-
+  const isAndroid = /Android/i.test(navigator.userAgent);
   if(isAndroid){
-    const mxIntent=`intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    const vlcIntent=`intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
-    let opened=false;
-    try{ window.location.href=mxIntent; opened=true; } catch {}
-    setTimeout(()=>{
-      if(!opened){ try{ window.location.href=vlcIntent; opened=true; } catch{} }
-    },500);
-    setTimeout(()=>{ if(!opened) playChannelInternal(canal,isHls,weakBox); },1000);
+    const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+    const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
+    let opened = false;
+
+    try { window.location.href = mxIntent; opened = true; } catch {}
+    setTimeout(() => { if(!opened){ try { window.location.href = vlcIntent; opened = true; } catch {} } }, 500);
+    setTimeout(() => { if(!opened){ playChannelInternal(canal); } }, 1000);
+    return;
+  }
+  playChannelInternal(canal);
+}
+
+function playChannelInternal(canal) {
+  if (clapprPlayer) clapprPlayer.destroy();
+  clapprPlayer = null;
+
+  const box = document.getElementById("player");
+  box.innerHTML = "";
+  videoContainer.classList.add("active");
+
+  const video = document.createElement("video");
+  video.controls = true;
+  video.autoplay = true;
+  video.style.width = "100%";
+  video.style.height = "100%";
+  video.playsInline = true;
+  box.appendChild(video);
+
+  if (isWeakBox()) { video.src = canal.url; video.play().catch(()=>{}); return; }
+
+  const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
+
+  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
+  if (isHls && Hls.isSupported()) {
+    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
+    hls.loadSource(canal.url);
+    hls.attachMedia(video);
     return;
   }
 
-  playChannelInternal(canal,isHls,weakBox);
+  clapprPlayer = new Clappr.Player({
+    parentId: "#player",
+    source: canal.url,
+    autoPlay: true,
+    width: "100%",
+    height: "100%",
+    playback: { playInline: true },
+    plugins: [DashShakaPlayback],
+    shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
+  });
 }
 
-function playChannelInternal(canal,isHls,weakBox){
-  if(clapprPlayer) clapprPlayer.destroy(); clapprPlayer=null;
-  const box=document.getElementById("player"); box.innerHTML="";
-  videoContainer.classList.add("active");
+// ==================== CONTROLES ====================
+document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
+document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
+document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
+document.getElementById("fullscreenBtn").onclick = () => {
+  const playerEl=document.getElementById("player");
+  if(playerEl.requestFullscreen) playerEl.requestFullscreen();
+  else if(playerEl.webkitRequestFullscreen) playerEl.webkitRequestFullscreen();
+  else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen();
+};
 
-  const video=document.createElement("video");
-  video.controls=true; video.autoplay=true; video.style.width="100%"; video.style.height="100%"; video.playsInline=true;
-  box.appendChild(video);
-
-  if(weakBox){ video.src=canal.url; video.play().catch(()=>{}); return; }
-  if(isHls && video.canPlayType("application/vnd.apple.mpegurl")){ video.src=canal.url; video.play(); return; }
-  if(isHls && Hls.isSupported()){ const hls=new Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:20}); hls.loadSource(canal.url); hls.attachMedia(video); return; }
-
-  clapprPlayer=new Clappr.Player({ parentId:"#player", source:canal.url, autoPlay:true, width:"100%", height:"100%", playback:{playInline:true}, plugins:[DashShakaPlayback], shakaConfiguration:{streaming:{rebufferingGoal:15,bufferingGoal:20}} });
-}
-
-// ===== CONTROLES =====
-const exitBtn=document.getElementById("exitBtn");
-document.getElementById("exitBtn").onclick=()=>{ if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
-document.getElementById("prevBtn").onclick=()=>{ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; lastChannelIndex=currentIndex; playChannel(allChannels[currentIndex]); };
-document.getElementById("nextBtn").onclick=()=>{ currentIndex=(currentIndex+1)%allChannels.length; lastChannelIndex=currentIndex; playChannel(allChannels[currentIndex]); };
-document.getElementById("fullscreenBtn").onclick=()=>{ const playerEl=document.getElementById("player"); if(playerEl.requestFullscreen) playerEl.requestFullscreen(); else if(playerEl.webkitRequestFullscreen) playerEl.webkitRequestFullscreen(); else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen(); };
-
-// ===== MENU =====
-document.getElementById("btnListaSalva").onclick=()=> carregarLista(listaSalvaUrl);
-document.getElementById("btnFavoritos").onclick=()=>{
-  const favChannels=allChannels.filter(c=>favorites.includes(c.tvg_name));
-  canaisAtuais=favChannels;
+// ==================== MENU ====================
+document.getElementById("btnListaSalva").onclick = () => carregarLista(listaSalvaUrl);
+document.getElementById("btnFavoritos").onclick = () => {
+  const favChannels = allChannels.filter(c => favorites.includes(c.tvg_name));
+  canaisAtuais = favChannels;
   renderChannelList(favChannels);
 };
 
-// ===== NAVEGAÇÃO REMOTA COM SCROLL =====
-let focusIndex=0, focusType="category";
-function applyFocus(){
-  document.querySelectorAll(".focused").forEach(el=>el.classList.remove("focused"));
-  let el=null;
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); el=cats[focusIndex]; }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); el=ch[focusIndex]; }
-  if(el){ el.classList.add("focused"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+// ==================== NAVEGAÇÃO REMOTA ====================
+let focusIndex = 0;
+let focusType = "category";
+
+function applyFocus() {
+  document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) { cats[focusIndex].classList.add("focused"); cats[focusIndex].scrollIntoView({block:"center"}); } }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) { ch[focusIndex].classList.add("focused"); ch[focusIndex].scrollIntoView({block:"center"}); } }
 }
-function selectFocused(){
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
-}
-function moveFocus(dir){
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0,Math.min(cats.length-1,focusIndex+dir)); applyFocus(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0,Math.min(ch.length-1,focusIndex+dir)); applyFocus(); }
-}
-document.addEventListener("keydown",(e)=>{
+
+document.addEventListener("keydown", (e) => {
   const key=e.key;
   if(key==="ArrowDown") moveFocus(1);
   if(key==="ArrowUp") moveFocus(-1);
-  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
-  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
-  if(key==="Enter") selectFocused();
-  if(key==="Backspace"||key==="Escape"){
-    if(videoContainer.classList.contains("active")){
-      exitBtn.click();
-      focusType="channel";
-      if(lastCategory){
-        const cats=document.querySelectorAll(".category-label");
-        const catDiv = Array.from(cats).find(d=>d.textContent===lastCategory);
-        if(catDiv){
-          const catIndex = Array.from(cats).indexOf(catDiv);
-          focusType="category"; focusIndex=catIndex; applyFocus();
-          catDiv.click();
-          setTimeout(()=>{
-            focusType="channel"; focusIndex=lastChannelIndex; applyFocus();
-          },100);
-        }
-      }
-    }
-  }
+  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; } else nextChannel(); }
+  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; } else prevChannel(); }
+  if(key==="Enter") selectFocus();
+  applyFocus();
 });
+
+function moveFocus(dir){
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=(focusIndex+dir+cats.length)%cats.length; }
+  else if(focusType==="channel"){ const chs=document.querySelectorAll(".channel"); focusIndex=(focusIndex+dir+chs.length)%chs.length; }
+}
+function selectFocus(){
+  if(focusType==="category"){ document.querySelectorAll(".category-label")[focusIndex].click(); focusType="channel"; focusIndex=0; applyFocus(); }
+  else if(focusType==="channel"){ document.querySelectorAll(".channel")[focusIndex].click(); }
+}
+function nextChannel(){ currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); }
+function prevChannel(){ currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); }
+
 </script>
 
 </body>
