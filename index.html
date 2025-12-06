@@ -24,6 +24,7 @@ if ("serviceWorker" in navigator) {
 <script src="https://cdn.jsdelivr.net/gh/clappr/dash-shaka-playback/dist/dash-shaka-playback.min.js"></script>
 
 <style>
+/* ==================== Estilos ==================== */
 body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-serif; color:#fff; overflow:hidden; }
 #topBar { position:fixed; top:0; left:0; height:60px; width:100%; background:#000000aa; display:flex; align-items:center; padding:0 15px; justify-content:space-between; z-index:10000; backdrop-filter: blur(4px); font-size:15px; }
 #senhaSection { height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; text-align:center; padding:20px; gap:15px; overflow-y:auto; }
@@ -48,11 +49,11 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 #player { width:100%; height:100%; }
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
-.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);}
 </style>
 </head>
 <body>
 
+<!-- TELA DE LOGIN -->
 <div id="senhaSection">
   <div style="max-width:480px; background:#111; padding:15px; border-radius:12px; box-shadow:0 0 12px rgba(0,0,0,0.7); color:#fff; line-height:1.4; font-size:13px;">
     <h2 style="color:#1e90ff; text-align:center; margin-bottom:10px; font-size:18px;">Bem-vindo!</h2>
@@ -67,6 +68,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   </div>
 </div>
 
+<!-- CONTAINER PRINCIPAL IPTV -->
 <div class="container">
   <div class="sidebar">
     <div class="top-buttons">
@@ -98,17 +100,15 @@ let allChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let currentIndex = 0;
 let canaisAtuais = [];
-let focusIndex = 0;
-let focusType = "category";
-let clapprPlayer = null;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
 const channelList = document.getElementById("channelList");
 const rightList = document.getElementById("channelListRight");
 const videoContainer = document.getElementById("videoContainer");
+let clapprPlayer = null;
 
-// LOGIN
+// ==================== LOGIN ====================
 document.getElementById("senhaBtn").onclick = () => {
   const senha = document.getElementById("senhaInput").value;
   if (senhasValidas.includes(senha)) {
@@ -131,7 +131,7 @@ document.getElementById("testarGratisBtnLogin").onclick = () => {
   document.getElementById("senhaBtn").click();
 };
 
-// IPTV
+// ==================== IPTV Funções ====================
 async function carregarLista(url) {
   try {
     const res = await fetch(url);
@@ -191,7 +191,7 @@ function toggleFavorite(name, btn) {
   btn.classList.toggle("not-fav");
 }
 
-// Detect weak box
+// ==================== DETECÇÃO DE TV BOX FRACA ====================
 function isWeakBox() {
   const ua = navigator.userAgent;
   const lowSpecAndroid = /Android [5-8]/.test(ua);
@@ -199,20 +199,42 @@ function isWeakBox() {
   return lowSpecAndroid || lowMemory;
 }
 
-// Hybrid play
+// ==================== FUNÇÃO HYBRID PLAY ====================
 function playChannel(canal) {
   if (!canal.url) return;
 
   const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
   const weakBox = isWeakBox();
 
-  if(clapprPlayer) clapprPlayer.destroy();
+  // Prioridade: MXPlayer → VLC → player interno
+  const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+  const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
+
+  let externalOpened = false;
+
+  // Tenta abrir MXPlayer
+  try { window.location.href = mxIntent; externalOpened = true; } catch {}
+
+  // Se MXPlayer não abrir, tenta VLC após 500ms
+  setTimeout(() => {
+    if (!externalOpened) {
+      try { window.location.href = vlcIntent; externalOpened = true; } catch {}
+    }
+  }, 500);
+
+  // Se nenhum externo abrir, usar player interno após 1000ms
+  setTimeout(() => {
+    if (!externalOpened) playChannelInternal(canal, isHls, weakBox);
+  }, 1000);
+}
+
+function playChannelInternal(canal, isHls, weakBox) {
+  if (clapprPlayer) clapprPlayer.destroy();
   clapprPlayer = null;
 
   const box = document.getElementById("player");
   box.innerHTML = "";
   videoContainer.classList.add("active");
-  focusType = "player";
 
   const video = document.createElement("video");
   video.controls = true;
@@ -223,6 +245,7 @@ function playChannel(canal) {
   box.appendChild(video);
 
   if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); return; }
+
   if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
   if (isHls && Hls.isSupported()) {
     const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
@@ -243,8 +266,8 @@ function playChannel(canal) {
   });
 }
 
-// Controles
-document.getElementById("exitBtn").onclick = exitPlayer;
+// ==================== CONTROLES ====================
+document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
 document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("fullscreenBtn").onclick = () => {
@@ -254,83 +277,48 @@ document.getElementById("fullscreenBtn").onclick = () => {
   else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen();
 };
 
-// Menu
+// ==================== MENU ====================
 document.getElementById("btnListaSalva").onclick = () => carregarLista(listaSalvaUrl);
 document.getElementById("btnFavoritos").onclick = () => {
   const favChannels = allChannels.filter(c => favorites.includes(c.tvg_name));
   canaisAtuais = favChannels;
   renderChannelList(favChannels);
-}
+};
 
-// ==================== CONTROLE REMOTO COM SETAS E OK ====================
+// ==================== NAVEGAÇÃO REMOTA ====================
+let focusIndex = 0;
+let focusType = "category";
+
 function applyFocus() {
   document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
-  if(focusType === "category"){
-    const cats = document.querySelectorAll(".category-label");
-    if(cats[focusIndex]) cats[focusIndex].classList.add("focused");
-  } else if(focusType === "channel"){
-    const ch = document.querySelectorAll(".channel");
-    if(ch[focusIndex]) ch[focusIndex].classList.add("focused");
-  }
+  if(focusType==="category") { const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); }
+  else if(focusType==="channel") { const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
 }
+
+const css = document.createElement("style");
+css.innerHTML = `.focused { outline: 3px solid #1e90ff !important; background-color: #1e90ff33 !important; transform: scale(1.03);} `;
+document.head.appendChild(css);
 
 document.addEventListener("keydown", (e) => {
-  const key = e.key;
-
-  if(focusType === "player"){
-    if(key === "ArrowRight") document.getElementById("nextBtn").click();
-    if(key === "ArrowLeft") document.getElementById("prevBtn").click();
-    if(key === "ArrowUp") exitPlayer(); // seta para cima sai do player
-    if(key === "Enter"){
-      const video = document.querySelector("#player video");
-      if(video){ if(video.paused) video.play(); else video.pause(); }
-    }
-    return;
-  }
-
-  if(key === "ArrowDown") moveFocus(1);
-  if(key === "ArrowUp") moveFocus(-1);
-  if(key === "ArrowRight" && focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); }
-  if(key === "ArrowLeft" && focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); }
-  if(key === "Enter") selectFocused();
+  const key=e.key;
+  if(key==="ArrowDown") moveFocus(1);
+  if(key==="ArrowUp") moveFocus(-1);
+  if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
+  if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
+  if(key==="Enter") selectFocused();
+  if(key==="Backspace"||key==="Escape"){ if(videoContainer.classList.contains("active")) exitBtn.click(); focusType="channel"; applyFocus(); }
 });
 
-function moveFocus(dir){
-  if(focusType === "category"){
-    const cats = document.querySelectorAll(".category-label");
-    focusIndex = Math.max(0, Math.min(cats.length -1, focusIndex + dir));
-    applyFocus();
-  } else if(focusType === "channel"){
-    const ch = document.querySelectorAll(".channel");
-    focusIndex = Math.max(0, Math.min(ch.length -1, focusIndex + dir));
-    applyFocus();
-  }
+function moveFocus(dir) {
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0, Math.min(cats.length-1, focusIndex+dir)); applyFocus(); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0, Math.min(ch.length-1, focusIndex+dir)); applyFocus(); }
 }
 
-function selectFocused(){
-  if(focusType === "category"){
-    const cats = document.querySelectorAll(".category-label");
-    if(cats[focusIndex]) cats[focusIndex].click();
-  } else if(focusType === "channel"){
-    const ch = document.querySelectorAll(".channel");
-    if(ch[focusIndex]) ch[focusIndex].click();
-  }
+function selectFocused() {
+  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); focusType="channel"; focusIndex=0; applyFocus(); }
+  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
 }
-
-function exitPlayer(){
-  if(clapprPlayer) clapprPlayer.destroy();
-  videoContainer.classList.remove("active");
-
-  if(document.querySelectorAll(".channel").length > 0){
-    focusType = "channel";
-    focusIndex = currentIndex;
-    applyFocus();
-  } else {
-    focusType = "category";
-    focusIndex = 0;
-    applyFocus();
-  }
-}
+applyFocus();
 </script>
 
 </body>
