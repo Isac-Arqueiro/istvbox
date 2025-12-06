@@ -24,7 +24,6 @@ if ("serviceWorker" in navigator) {
 <script src="https://cdn.jsdelivr.net/gh/clappr/dash-shaka-playback/dist/dash-shaka-playback.min.js"></script>
 
 <style>
-/* ==================== Estilos ==================== */
 body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-serif; color:#fff; overflow:hidden; }
 #topBar { position:fixed; top:0; left:0; height:60px; width:100%; background:#000000aa; display:flex; align-items:center; padding:0 15px; justify-content:space-between; z-index:10000; backdrop-filter: blur(4px); font-size:15px; }
 #senhaSection { height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#000; text-align:center; padding:20px; gap:15px; overflow-y:auto; }
@@ -54,7 +53,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 </head>
 <body>
 
-<!-- TELA DE LOGIN -->
 <div id="senhaSection">
   <div style="max-width:480px; background:#111; padding:15px; border-radius:12px; box-shadow:0 0 12px rgba(0,0,0,0.7); color:#fff; line-height:1.4; font-size:13px;">
     <h2 style="color:#1e90ff; text-align:center; margin-bottom:10px; font-size:18px;">Bem-vindo!</h2>
@@ -69,7 +67,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   </div>
 </div>
 
-<!-- CONTAINER PRINCIPAL IPTV -->
 <div class="container">
   <div class="sidebar">
     <div class="top-buttons">
@@ -101,15 +98,17 @@ let allChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
 let currentIndex = 0;
 let canaisAtuais = [];
+let focusIndex = 0;
+let focusType = "category";
+let clapprPlayer = null;
 
 const senhaSection = document.getElementById("senhaSection");
 const container = document.querySelector(".container");
 const channelList = document.getElementById("channelList");
 const rightList = document.getElementById("channelListRight");
 const videoContainer = document.getElementById("videoContainer");
-let clapprPlayer = null;
 
-// ==================== LOGIN ====================
+// LOGIN
 document.getElementById("senhaBtn").onclick = () => {
   const senha = document.getElementById("senhaInput").value;
   if (senhasValidas.includes(senha)) {
@@ -132,7 +131,7 @@ document.getElementById("testarGratisBtnLogin").onclick = () => {
   document.getElementById("senhaBtn").click();
 };
 
-// ==================== IPTV Funções ====================
+// IPTV
 async function carregarLista(url) {
   try {
     const res = await fetch(url);
@@ -192,7 +191,7 @@ function toggleFavorite(name, btn) {
   btn.classList.toggle("not-fav");
 }
 
-// ==================== DETECÇÃO DE TV BOX FRACA ====================
+// Detect weak box
 function isWeakBox() {
   const ua = navigator.userAgent;
   const lowSpecAndroid = /Android [5-8]/.test(ua);
@@ -200,42 +199,20 @@ function isWeakBox() {
   return lowSpecAndroid || lowMemory;
 }
 
-// ==================== FUNÇÃO HYBRID PLAY ====================
+// Hybrid play
 function playChannel(canal) {
   if (!canal.url) return;
 
   const isHls = canal.url.includes(".m3u8") || canal.url.includes(".mpd");
-  const isAndroid = /Android/i.test(navigator.userAgent);
   const weakBox = isWeakBox();
 
-  if (isAndroid) {
-    const mxIntent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;type=video/*;end`;
-
-    let opened = false;
-    try { window.location.href = mxIntent; opened = true; } catch {}
-    setTimeout(() => {
-      if (!opened) {
-        try { window.location.href = vlcIntent; opened = true; } catch {}
-      }
-    }, 500);
-
-    setTimeout(() => {
-      if (!opened) playChannelInternal(canal, isHls, weakBox);
-    }, 1000);
-    return;
-  }
-
-  playChannelInternal(canal, isHls, weakBox);
-}
-
-function playChannelInternal(canal, isHls, weakBox) {
-  if (clapprPlayer) clapprPlayer.destroy();
+  if(clapprPlayer) clapprPlayer.destroy();
   clapprPlayer = null;
 
   const box = document.getElementById("player");
   box.innerHTML = "";
   videoContainer.classList.add("active");
+  focusType = "player";
 
   const video = document.createElement("video");
   video.controls = true;
@@ -245,44 +222,29 @@ function playChannelInternal(canal, isHls, weakBox) {
   video.playsInline = true;
   box.appendChild(video);
 
-  if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); } 
-  else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); } 
-  else if (isHls && Hls.isSupported()) { const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 }); hls.loadSource(canal.url); hls.attachMedia(video); video.play(); } 
-  else { 
-    clapprPlayer = new Clappr.Player({
-      parentId: "#player",
-      source: canal.url,
-      autoPlay: true,
-      width: "100%",
-      height: "100%",
-      playback: { playInline: true },
-      plugins: [DashShakaPlayback],
-      shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
-    }); 
+  if (weakBox) { video.src = canal.url; video.play().catch(()=>{}); return; }
+  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
+  if (isHls && Hls.isSupported()) {
+    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, maxBufferLength:20 });
+    hls.loadSource(canal.url);
+    hls.attachMedia(video);
+    return;
   }
 
-  // FULLSCREEN AUTOMÁTICO
-  setTimeout(() => {
-    if (video.requestFullscreen) video.requestFullscreen();
-    else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
-    else if (video.msRequestFullscreen) video.msRequestFullscreen();
-
-    // FOCO AUTOMÁTICO NO PLAYER
-    focusType = "player";
-    applyFocus();
-  }, 500);
+  clapprPlayer = new Clappr.Player({
+    parentId: "#player",
+    source: canal.url,
+    autoPlay: true,
+    width: "100%",
+    height: "100%",
+    playback: { playInline: true },
+    plugins: [DashShakaPlayback],
+    shakaConfiguration: { streaming: { rebufferingGoal:15, bufferingGoal:20 } }
+  });
 }
 
-// ==================== CONTROLES ====================
-document.getElementById("exitBtn").onclick = () => {
-  if(clapprPlayer) clapprPlayer.destroy();
-  videoContainer.classList.remove("active");
-
-  // Mantém foco no canal selecionado
-  focusType = "channel";
-  focusIndex = currentIndex;
-  applyFocus();
-};
+// Controles
+document.getElementById("exitBtn").onclick = exitPlayer;
 document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
 document.getElementById("fullscreenBtn").onclick = () => {
@@ -292,54 +254,82 @@ document.getElementById("fullscreenBtn").onclick = () => {
   else if(playerEl.msRequestFullscreen) playerEl.msRequestFullscreen();
 };
 
-// ==================== MENU ====================
+// Menu
 document.getElementById("btnListaSalva").onclick = () => carregarLista(listaSalvaUrl);
 document.getElementById("btnFavoritos").onclick = () => {
   const favChannels = allChannels.filter(c => favorites.includes(c.tvg_name));
   canaisAtuais = favChannels;
   renderChannelList(favChannels);
-};
+}
 
-// ==================== NAVEGAÇÃO REMOTA ====================
-let focusIndex = 0;
-let focusType = "category"; // category, channel, player
-
+// ==================== CONTROLE REMOTO COM SETAS E OK ====================
 function applyFocus() {
   document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
-  if(focusType==="category") { const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].classList.add("focused"); }
-  else if(focusType==="channel") { const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].classList.add("focused"); }
+  if(focusType === "category"){
+    const cats = document.querySelectorAll(".category-label");
+    if(cats[focusIndex]) cats[focusIndex].classList.add("focused");
+  } else if(focusType === "channel"){
+    const ch = document.querySelectorAll(".channel");
+    if(ch[focusIndex]) ch[focusIndex].classList.add("focused");
+  }
 }
 
 document.addEventListener("keydown", (e) => {
-  const key=e.key;
+  const key = e.key;
 
-  if(focusType==="category" || focusType==="channel") {
-    if(key==="ArrowDown") moveFocus(1);
-    if(key==="ArrowUp") moveFocus(-1);
-    if(key==="ArrowRight"){ if(focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); } }
-    if(key==="ArrowLeft"){ if(focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); } }
-    if(key==="Enter") selectFocused();
-  }
-
-  if(focusType==="player") {
-    if(key==="ArrowRight") document.getElementById("nextBtn").click();
-    if(key==="ArrowLeft") document.getElementById("prevBtn").click();
-    if(key==="Backspace" || key==="Escape") document.getElementById("exitBtn").click();
-    if(key==="Enter") {
-      const video=document.querySelector("#player video");
+  if(focusType === "player"){
+    if(key === "ArrowRight") document.getElementById("nextBtn").click();
+    if(key === "ArrowLeft") document.getElementById("prevBtn").click();
+    if(key === "ArrowUp") exitPlayer(); // seta para cima sai do player
+    if(key === "Enter"){
+      const video = document.querySelector("#player video");
       if(video){ if(video.paused) video.play(); else video.pause(); }
     }
+    return;
   }
+
+  if(key === "ArrowDown") moveFocus(1);
+  if(key === "ArrowUp") moveFocus(-1);
+  if(key === "ArrowRight" && focusType==="category"){ focusType="channel"; focusIndex=0; applyFocus(); }
+  if(key === "ArrowLeft" && focusType==="channel"){ focusType="category"; focusIndex=0; applyFocus(); }
+  if(key === "Enter") selectFocused();
 });
 
-function moveFocus(dir) {
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); focusIndex=Math.max(0, Math.min(cats.length-1, focusIndex+dir)); applyFocus(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); focusIndex=Math.max(0, Math.min(ch.length-1, focusIndex+dir)); applyFocus(); }
+function moveFocus(dir){
+  if(focusType === "category"){
+    const cats = document.querySelectorAll(".category-label");
+    focusIndex = Math.max(0, Math.min(cats.length -1, focusIndex + dir));
+    applyFocus();
+  } else if(focusType === "channel"){
+    const ch = document.querySelectorAll(".channel");
+    focusIndex = Math.max(0, Math.min(ch.length -1, focusIndex + dir));
+    applyFocus();
+  }
 }
 
-function selectFocused() {
-  if(focusType==="category"){ const cats=document.querySelectorAll(".category-label"); if(cats[focusIndex]) cats[focusIndex].click(); }
-  else if(focusType==="channel"){ const ch=document.querySelectorAll(".channel"); if(ch[focusIndex]) ch[focusIndex].click(); }
+function selectFocused(){
+  if(focusType === "category"){
+    const cats = document.querySelectorAll(".category-label");
+    if(cats[focusIndex]) cats[focusIndex].click();
+  } else if(focusType === "channel"){
+    const ch = document.querySelectorAll(".channel");
+    if(ch[focusIndex]) ch[focusIndex].click();
+  }
+}
+
+function exitPlayer(){
+  if(clapprPlayer) clapprPlayer.destroy();
+  videoContainer.classList.remove("active");
+
+  if(document.querySelectorAll(".channel").length > 0){
+    focusType = "channel";
+    focusIndex = currentIndex;
+    applyFocus();
+  } else {
+    focusType = "category";
+    focusIndex = 0;
+    applyFocus();
+  }
 }
 </script>
 
