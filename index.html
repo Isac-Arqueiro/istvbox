@@ -103,7 +103,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   <div class="categories" id="categoriesContainer"></div>
   <div class="movie-container" id="moviesContainer"></div>
 </div>
-
 <script>
 // ==================== VARIÁVEIS ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
@@ -211,7 +210,6 @@ function abrirCanalVLC(canal) {
   if (!canal.url) return;
   const vlcUrl = `vlc://${canal.url}`;
   window.location.href = vlcUrl;
-  // Fallback interno se VLC não abrir
   setTimeout(() => abrirCanal(canal), 1000);
 }
 
@@ -263,12 +261,20 @@ let focusIndex = 0;
 let focusType = "category";
 
 function applyFocus() {
-  document.querySelectorAll(".focused").forEach(el=>el.classList.remove("focused"));
-  let elems = focusType==="category"?document.querySelectorAll(".category-label"):document.querySelectorAll(".channel");
-  if(elems[focusIndex]) elems[focusIndex].classList.add("focused");
+  document.querySelectorAll(".focused").forEach(el => el.classList.remove("focused"));
+  let elems = focusType === "category" ? document.querySelectorAll(".category-label") : document.querySelectorAll(".channel");
+  if (elems[focusIndex]) {
+    elems[focusIndex].classList.add("focused");
+
+    // SCROLL AUTOMÁTICO
+    elems[focusIndex].scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }
 }
 
-document.addEventListener("keydown", e=>{
+document.addEventListener("keydown", e => {
   if(e.key==="ArrowDown") focusIndex=Math.min(focusIndex+1,(focusType==="category"?document.querySelectorAll(".category-label").length:document.querySelectorAll(".channel").length)-1);
   if(e.key==="ArrowUp") focusIndex=Math.max(focusIndex-1,0);
   if(e.key==="ArrowRight" && focusType==="category") { focusType="channel"; focusIndex=0; }
