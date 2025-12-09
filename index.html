@@ -126,7 +126,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 <script>
 // ==================== Variáveis IPTV ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
-const categoriasValidas = ['Classic','Series','CANAIS I 24HORAS','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
+const categoriasValidas = ['Classic','CANAIS I 24HORAS','Series','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
 let allChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
@@ -149,6 +149,7 @@ document.getElementById("senhaBtn").onclick = () => {
     carregarLista(listaSalvaUrl);
   } else { alert("Senha incorreta!"); }
 };
+
 window.onload = () => {
   const savedSenha = localStorage.getItem("iptv_password");
   if (senhasValidas.includes(savedSenha)) {
@@ -157,6 +158,7 @@ window.onload = () => {
     carregarLista(listaSalvaUrl);
   }
 };
+
 document.getElementById("testarGratisBtnLogin").onclick = () => {
   document.getElementById("senhaInput").value = "2025";
   document.getElementById("senhaBtn").click();
@@ -171,21 +173,30 @@ async function carregarLista(url) {
     renderCategorias();
   } catch { alert("Erro ao carregar lista."); }
 }
+
 function parseM3U(txt) {
   const linhas = txt.split("\n");
   let canais = [];
   let canal = null;
+
   for (let l of linhas) {
     l = l.trim();
     if (l.startsWith("#EXTINF")) {
-      canal = { tvg_name: (l.match(/tvg-name="([^"]+)"/) || ["", "Sem Nome"])[1],
-                tvg_logo: (l.match(/tvg-logo="([^"]+)"/) || ["", ""])[1],
-                group_title: (l.match(/group-title="([^"]+)"/) || ["", "Outros"])[1],
-                url: "" };
-    } else if (l && canal) { canal.url = l; canais.push(canal); canal=null; }
+      canal = { 
+        tvg_name: (l.match(/tvg-name="([^"]+)"/) || ["", "Sem Nome"])[1],
+        tvg_logo: (l.match(/tvg-logo="([^"]+)"/) || ["", ""])[1],
+        group_title: (l.match(/group-title="([^"]+)"/) || ["", "Outros"])[1],
+        url: "" 
+      };
+    } else if (l && canal) { 
+      canal.url = l; 
+      canais.push(canal); 
+      canal=null; 
+    }
   }
   return canais;
 }
+
 function renderCategorias() {
   channelList.innerHTML = "";
   categoriasValidas.forEach(cat => {
@@ -200,113 +211,62 @@ function renderCategorias() {
     channelList.appendChild(div);
   });
 }
+
 function renderChannelList(canais) {
   rightList.innerHTML = "";
   canais.forEach((canal, index) => {
     const div = document.createElement("div");
     div.className = "channel";
     div.dataset.index = index;
-    div.innerHTML = `<img src="${canal.tvg_logo||'https://via.placeholder.com/50'}"><span>${canal.tvg_name}</span>
-                     <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
-                     ${favorites.includes(canal.tvg_name) ? "★" : "☆"}</button>`;
-    div.querySelector("button").onclick = (e) => { e.stopPropagation(); toggleFavorite(canal.tvg_name,e.target); };
+    div.innerHTML = `
+      <img src="${canal.tvg_logo||'https://via.placeholder.com/50'}">
+      <span>${canal.tvg_name}</span>
+      <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
+        ${favorites.includes(canal.tvg_name) ? "★" : "☆"}
+      </button>`;
+    
+    div.querySelector("button").onclick = (e) => { 
+      e.stopPropagation(); 
+      toggleFavorite(canal.tvg_name,e.target); 
+    };
+
     div.onclick = () => { currentIndex=index; playChannel(canal); };
     rightList.appendChild(div);
   });
 }
+
 function toggleFavorite(name, btn) {
   if(favorites.includes(name)) favorites=favorites.filter(n=>n!==name);
   else favorites.push(name);
+
   localStorage.setItem("favorites", JSON.stringify(favorites));
-  btn.textContent = favorites.includes(name)?"★":"☆";
+
+  btn.textContent = favorites.includes(name) ? "★" : "☆";
   btn.classList.toggle("not-fav");
 }
 
-/* ======================================================
-   🔥 SUPORTE PARA MX PLAYER (Android 7, 6 e 5)
-   ====================================================== */
-const isOldAndroid = (() => {
-  const ua = navigator.userAgent;
-  return ua.includes("Android 9") || ua.includes("Android 8") || 
-         ua.includes("Android 7") || ua.includes("Android 6") || ua.includes("Android 5");
-})();
-
-function abrirNoMX(url) {
-  const intent = `intent:${url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-  window.location.href = intent;
-
-  setTimeout(() => {
-    alert("MX Player não encontrado. Instale-o na Play Store.");
-  }, 1200);
-}
-
-/* ======================================================
-   PLAYCHANNEL (AGORA COM MX PLAYER)
-   ====================================================== */
+/* ===========================================================
+   🔥 SUPORTE UNIVERSAL PARA VLC (QUALQUER VERSÃO/APK)
+   =========================================================== */
 function playChannel(canal) {
   if (!canal.url) return;
 
-  // 🔥 TESTE: Todos os M3U8 vão abrir no MX Player
-  if (canal.url.includes(".m3u8")) {
-    const intent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    window.location.href = intent;
+  const url = canal.url;
 
-    // Se MX não estiver instalado, alerta
-    function playChannel(canal) {
-  if (!canal.url) return;
+  // 🔥 Intent universal para VLC (funciona em QUALQUER versão)
+  const vlcIntent = `intent:${url}#Intent;scheme=vlc;type=video/*;end`;
+  window.location.href = vlcIntent;
 
-  // 🔥 TESTE: Todos os M3U8 vão abrir no MX Player
-  if (canal.url.includes(".m3u8")) {
-    const intent = `intent:${canal.url}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
-    window.location.href = intent;
-    return; // impede o player interno
-  }
-
-  // 🔵 Outros formatos continuam no player interno
-  if (clapprPlayer) clapprPlayer.destroy();
-  clapprPlayer = null;
-
-  const box = document.getElementById("player");
-  box.innerHTML = "";
-  videoContainer.classList.add("active");
-
-  const video = document.createElement("video");
-  video.controls = true;
-  video.autoplay = true;
-  video.style.width = "100%";
-  video.style.height = "100%";
-  box.appendChild(video);
-
-  const isHls = canal.url.includes(".m3u8");
-
-  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) {
-    video.src = canal.url;
-    video.play();
-    return;
-  }
-
-  if (isHls && Hls.isSupported()) {
-    const hls = new Hls();
-    hls.loadSource(canal.url);
-    hls.attachMedia(video);
-    return;
-  }
-
-  clapprPlayer = new Clappr.Player({
-    parentId: "#player",
-    source: canal.url,
-    autoPlay: true,
-    width: "100%",
-    height: "100%",
-    playback: { playInline: true },
-    plugins: [DashShakaPlayback]
-  });
+  // Se VLC não abriu → navegador não perdeu o foco → usar player interno
+  setTimeout(() => {
+    if (!document.hidden) abrirPlayerInterno(url);
+  }, 1200);
 }
 
-    return; // impede que o player interno carregue
-  }
-
-  // 🔵 Outros formatos continuam usando o player interno
+/* ===========================================================
+   🔵 PLAYER INTERNO (CASO VLC NÃO ABRA)
+   =========================================================== */
+function abrirPlayerInterno(url) {
   if (clapprPlayer) clapprPlayer.destroy();
   clapprPlayer = null;
 
@@ -321,24 +281,24 @@ function playChannel(canal) {
   video.style.height = "100%";
   box.appendChild(video);
 
-  const isHls = canal.url.includes(".m3u8");
+  const isHls = url.includes(".m3u8");
 
   if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) {
-    video.src = canal.url;
+    video.src = url;
     video.play();
     return;
   }
 
   if (isHls && Hls.isSupported()) {
     const hls = new Hls();
-    hls.loadSource(canal.url);
+    hls.loadSource(url);
     hls.attachMedia(video);
     return;
   }
 
   clapprPlayer = new Clappr.Player({
     parentId: "#player",
-    source: canal.url,
+    source: url,
     autoPlay: true,
     width: "100%",
     height: "100%",
@@ -348,9 +308,21 @@ function playChannel(canal) {
 }
 
 // ==================== Controles Player ====================
-document.getElementById("exitBtn").onclick = () => { if(clapprPlayer) clapprPlayer.destroy(); videoContainer.classList.remove("active"); };
-document.getElementById("prevBtn").onclick = () => { currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; playChannel(allChannels[currentIndex]); };
-document.getElementById("nextBtn").onclick = () => { currentIndex=(currentIndex+1)%allChannels.length; playChannel(allChannels[currentIndex]); };
+document.getElementById("exitBtn").onclick = () => { 
+  if(clapprPlayer) clapprPlayer.destroy(); 
+  videoContainer.classList.remove("active"); 
+};
+
+document.getElementById("prevBtn").onclick = () => { 
+  currentIndex=(currentIndex-1+allChannels.length)%allChannels.length; 
+  playChannel(allChannels[currentIndex]); 
+};
+
+document.getElementById("nextBtn").onclick = () => { 
+  currentIndex=(currentIndex+1)%allChannels.length; 
+  playChannel(allChannels[currentIndex]); 
+};
+
 document.getElementById("fullscreenBtn").onclick = () => {
   const playerEl=document.getElementById("player");
   if(playerEl.requestFullscreen) playerEl.requestFullscreen();
@@ -366,6 +338,7 @@ document.getElementById("btnVip").onclick = () => {
   videoContainer.classList.remove("active");
   document.getElementById("maisCanaisSection").style.display = "flex";
 };
+
 document.getElementById("btnFavoritos").onclick = () => {
   const favChannels = allChannels.filter(c => favorites.includes(c.tvg_name));
   canaisAtuais = favChannels;
@@ -373,7 +346,7 @@ document.getElementById("btnFavoritos").onclick = () => {
 };
 
 // ======================================================
-// MAIS CANAIS (mantive tudo igual)
+// MAIS CANAIS — (SEM ALTERAÇÕES)
 // ======================================================
 const moviesByCategory = {};
 const categoriesContainer = document.getElementById("categoriesContainer");
@@ -389,10 +362,13 @@ Object.keys(moviesByCategory).forEach(cat => {
 function renderMovies(category) {
   moviesContainer.innerHTML = "";
   if(!moviesByCategory[category]) return;
+
   moviesByCategory[category].forEach(movie => {
     const card = document.createElement("div");
     card.className = "movie-card";
-    card.innerHTML = `<img src="${movie.cover}" alt="${movie.title}"><h3>${movie.title}</h3>
+    card.innerHTML = `
+      <img src="${movie.cover}" alt="${movie.title}">
+      <h3>${movie.title}</h3>
       <a href="${movie.link}" target="_blank">Assistir</a>`;
     moviesContainer.appendChild(card);
   });
@@ -408,7 +384,7 @@ voltarBtn.onclick = () => {
 categoriesContainer.prepend(voltarBtn);
 
 // ======================================================
-// SUPORTE REMOTO / NAVEGAÇÃO (mantive tudo original)
+// SUPORTE A CONTROLE REMOTO — (SEM ALTERAÇÕES)
 // ======================================================
 let focusIndex = 0;
 let focusType = "category";
@@ -508,17 +484,17 @@ document.addEventListener("keydown", (e) => {
     document.getElementById("fullscreenBtn").click();
   }
 });
+
 // =========================================================
-//  GARANTE QUE O CONTROLE VOLTA A FUNCIONAR AO SAIR DO MX
+//  GARANTE QUE O CONTROLE VOLTA A FUNCIONAR AO SAIR DO VLC
 // =========================================================
 setInterval(() => {
-  if (!document.hasFocus()) return; // só executa quando o navegador recupera o foco
+  if (!document.hasFocus()) return;
   window.focus();
   document.body.focus();
-
-  // Reaplica o foco visual no item atual
   applyFocus();
 }, 500);
+
 </script>
 </body>
 </html>
