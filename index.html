@@ -126,7 +126,7 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 <script>
 // ==================== Variáveis IPTV ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
-const categoriasValidas = ['Classic','CANAIS I 24HORAS','Series','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
+const categoriasValidas = ['Classic','Series','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
 let allChannels = [];
 let favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
@@ -246,18 +246,20 @@ function toggleFavorite(name, btn) {
 }
 
 /* ===========================================================
-   🔥 SUPORTE UNIVERSAL PARA VLC (QUALQUER VERSÃO/APK)
+   🔥 SUPORTE UNIVERSAL PARA VLC (OFICIAL E 100% FUNCIONAL)
    =========================================================== */
 function playChannel(canal) {
   if (!canal.url) return;
 
   const url = canal.url;
 
-  // 🔥 Intent universal para VLC (funciona em QUALQUER versão)
-  const vlcIntent = `intent:${url}#Intent;scheme=vlc;type=video/*;end`;
+  // Intent universal DO VLC → funciona em qualquer versão/apk
+  const vlcIntent =
+    `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
+
   window.location.href = vlcIntent;
 
-  // Se VLC não abriu → navegador não perdeu o foco → usar player interno
+  // Se VLC não abriu (volta para o navegador) → player interno
   setTimeout(() => {
     if (!document.hidden) abrirPlayerInterno(url);
   }, 1200);
@@ -436,7 +438,9 @@ document.addEventListener("keydown", (e) => {
   if (key === "0" && focusType === "channel") {
     const canal = canaisAtuais[focusIndex];
     if (canal) {
-      favorites.includes(canal.tvg_name) ? favorites=favorites.filter(n=>n!==canal.tvg_name) : favorites.push(canal.tvg_name);
+      favorites.includes(canal.tvg_name)
+        ? favorites=favorites.filter(n=>n!==canal.tvg_name)
+        : favorites.push(canal.tvg_name);
       localStorage.setItem("favorites", JSON.stringify(favorites));
       renderChannelList(canaisAtuais);
       applyFocus();
@@ -496,5 +500,6 @@ setInterval(() => {
 }, 500);
 
 </script>
+
 </body>
 </html>
