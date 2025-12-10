@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -103,7 +104,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   <div class="categories" id="categoriesContainer"></div>
   <div class="movie-container" id="moviesContainer"></div>
 </div>
-
 <script>
 // ==================== VARIÁVEIS ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
@@ -194,10 +194,7 @@ function renderCanaisAtuais() {
                      <button class="favorite-btn ${favorites.includes(canal.tvg_name) ? "" : "not-fav"}">
                      ${favorites.includes(canal.tvg_name) ? "★" : "☆"}</button>`;
     div.querySelector("button").onclick = e => { e.stopPropagation(); toggleFavorite(canal.tvg_name); };
-    
-    // Aqui usamos a função adaptada
     div.onclick = () => { currentIndex = index; abrirCanalVLC(canal); };
-    
     channelListRight.appendChild(div);
   });
 }
@@ -212,22 +209,9 @@ function toggleFavorite(name) {
 // ==================== ABRIR CANAL VLC UNIVERSAL ====================
 function abrirCanalVLC(canal) {
   if (!canal.url) return;
-
-  const isVLCOnly = canal.url.startsWith("rtsp://") || canal.url.startsWith("rtmp://") || canal.url.startsWith("mms://");
-  const isAndroid = /Android/i.test(navigator.userAgent);
-
-  if(isVLCOnly) {
-    if(isAndroid) {
-      // Abre VLC via Intent no Android
-      const vlcIntent = `intent:${canal.url}#Intent;package=org.videolan.vlc;scheme=vlc;end`;
-      window.location.href = vlcIntent;
-    } else {
-      // TV Box ou PC: usa protocolo vlc://
-      window.location.href = `vlc://${canal.url}`;
-    }
-  } else {
-    abrirCanal(canal); // player interno
-  }
+  const vlcUrl = `vlc://${canal.url}`;
+  window.location.href = vlcUrl;
+  setTimeout(() => abrirCanal(canal), 1000);
 }
 
 // ==================== PLAYER INTERNO ====================
@@ -247,17 +231,8 @@ function abrirCanal(canal) {
 
   const isHls = canal.url.includes(".m3u8");
 
-  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { 
-    video.src = canal.url; 
-    video.play(); 
-    return; 
-  }
-  if (isHls && Hls.isSupported()) { 
-    const hls = new Hls(); 
-    hls.loadSource(canal.url); 
-    hls.attachMedia(video); 
-    return; 
-  }
+  if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = canal.url; video.play(); return; }
+  if (isHls && Hls.isSupported()) { const hls = new Hls(); hls.loadSource(canal.url); hls.attachMedia(video); return; }
 
   playerInstance = new Clappr.Player({
     parentId: "#player",
