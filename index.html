@@ -206,36 +206,28 @@ function toggleFavorite(name) {
 }
 
 // ==================== ABRIR CANAL VLC UNIVERSAL ====================
-async function abrirCanalVLC(canal) {
+function abrirCanalVLC(canal) {
   if (!canal.url) return;
-
   const url = canal.url.trim();
-  const nome = canal.tvg_name || "canal";
 
-  // ---------- TV BOX / ANDROID ----------
-  if (/Android/i.test(navigator.userAgent)) {
-    const conteudo = `#EXTM3U\n#EXTINF:-1,${nome}\n${url}`;
-    const blob = new Blob([conteudo], { type: "audio/x-mpegurl" });
-    const tempUrl = URL.createObjectURL(blob);
+  const isAndroid = /Android/i.test(navigator.userAgent);
 
-    const link = document.createElement("a");
-    link.href = tempUrl;
-    link.download = `${nome}.m3u`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  if (isAndroid) {
+    // Intents Android → abre VLC diretamente
+    const intentUrl = `intent://${url.replace(/^https?:\/\//, '')}#Intent;package=org.videolan.vlc;scheme=https;end`;
+    window.location.href = intentUrl;
 
-    setTimeout(() => abrirCanal(canal), 2000);
-    return;
-  }
-
-  // ---------- DESKTOP ----------
-  try {
-    window.location.href = url;
+    // fallback para player interno se não abrir VLC
     setTimeout(() => abrirCanal(canal), 1500);
-  } catch (e) {
-    console.warn("Erro ao abrir no VLC, usando player interno.");
-    abrirCanal(canal);
+  } else {
+    // Desktop → abrir URL direta
+    try {
+      window.location.href = url;
+      setTimeout(() => abrirCanal(canal), 1500);
+    } catch (e) {
+      console.warn("Erro ao abrir no VLC, usando player interno.");
+      abrirCanal(canal);
+    }
   }
 }
 
