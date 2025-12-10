@@ -209,39 +209,36 @@ function toggleFavorite(name) {
 // ==================== ABRIR CANAL VLC UNIVERSAL ====================
 async function abrirCanalVLC(canal) {
   if (!canal.url) return;
+
   const url = canal.url.trim();
 
   // ==========================
-  // 1) TESTE: VERIFICAR SE VLC ESTÁ INSTALADO
-  // ==========================
-  const vlcPossible = await testarVLC();
-
-  // ==========================
-  // 2) ANDROID → usa intent VLC
+  // ANDROID → abre via intent no VLC
   // ==========================
   if (/Android/i.test(navigator.userAgent)) {
-    if (vlcPossible) {
-      // Abrir via VLC (intent)
-      const intent = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=http;package=org.videolan.vlc;end;`;
-      window.location.href = intent;
-    } else {
-      console.warn("VLC não encontrado — usando player interno.");
-      abrirCanal(canal);
-    }
+    const intentUrl =
+      `intent://${url.replace(/^https?:\/\//, "")}` +
+      `#Intent;scheme=http;package=org.videolan.vlc;end;`;
+
+    window.location.href = intentUrl;
+
+    // fallback → player interno
+    setTimeout(() => abrirCanal(canal), 1200);
     return;
   }
 
   // ==========================
-  // 3) WINDOWS / MAC / LINUX
+  // DESKTOP → abrir URL DIRETA
+  // (VLC intercepta automaticamente se estiver instalado)
   // ==========================
-  if (vlcPossible) {
-    const vlcUrl = `vlc://${url}`;
-    window.location.href = vlcUrl;
+  try {
+    window.location.href = url;
 
-    // fallback após 1.5 segundos
+    // fallback → player interno
     setTimeout(() => abrirCanal(canal), 1500);
-  } else {
-    console.warn("VLC não encontrado — usando player interno.");
+
+  } catch (e) {
+    console.warn("Erro ao abrir no VLC, usando player interno.");
     abrirCanal(canal);
   }
 }
