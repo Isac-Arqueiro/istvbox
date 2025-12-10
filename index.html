@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -46,7 +45,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
 .player-controls { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:10px; }
 .player-controls button { padding:6px 12px; border-radius:6px; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); color:#fff; border:1px solid #333; cursor:pointer; }
 
-/* ==================== Foco remoto ==================== */
 .focused { outline:3px solid #1e90ff !important; background-color:#1e90ff33 !important; transform:scale(1.03); }
 
 </style>
@@ -104,10 +102,11 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   <div class="categories" id="categoriesContainer"></div>
   <div class="movie-container" id="moviesContainer"></div>
 </div>
+
 <script>
 // ==================== VARIÁVEIS ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
-const categoriasValidas = ['Classic','Series','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
+const categoriasValidas = ['Classic','Series','CANAIS I 24HORAS','Kids','Religioso','Variedade','Canal aberto','Esporte','Animação','RunTime','Filmes','News','URBAN'];
 const senhasValidas = ["2025","A0C02550","A0X02551","A0Z02552"];
 let allChannels = [];
 let canaisAtuais = [];
@@ -211,32 +210,29 @@ async function abrirCanalVLC(canal) {
   if (!canal.url) return;
 
   const url = canal.url.trim();
+  const nome = canal.tvg_name || "canal";
 
-  // ==========================
-  // ANDROID → abre via intent no VLC
-  // ==========================
+  // ---------- TV BOX / ANDROID ----------
   if (/Android/i.test(navigator.userAgent)) {
-    const intentUrl =
-      `intent://${url.replace(/^https?:\/\//, "")}` +
-      `#Intent;scheme=http;package=org.videolan.vlc;end;`;
+    const conteudo = `#EXTM3U\n#EXTINF:-1,${nome}\n${url}`;
+    const blob = new Blob([conteudo], { type: "audio/x-mpegurl" });
+    const tempUrl = URL.createObjectURL(blob);
 
-    window.location.href = intentUrl;
+    const link = document.createElement("a");
+    link.href = tempUrl;
+    link.download = `${nome}.m3u`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    // fallback → player interno
-    setTimeout(() => abrirCanal(canal), 1200);
+    setTimeout(() => abrirCanal(canal), 2000);
     return;
   }
 
-  // ==========================
-  // DESKTOP → abrir URL DIRETA
-  // (VLC intercepta automaticamente se estiver instalado)
-  // ==========================
+  // ---------- DESKTOP ----------
   try {
     window.location.href = url;
-
-    // fallback → player interno
     setTimeout(() => abrirCanal(canal), 1500);
-
   } catch (e) {
     console.warn("Erro ao abrir no VLC, usando player interno.");
     abrirCanal(canal);
@@ -295,12 +291,7 @@ function applyFocus() {
   let elems = focusType === "category" ? document.querySelectorAll(".category-label") : document.querySelectorAll(".channel");
   if (elems[focusIndex]) {
     elems[focusIndex].classList.add("focused");
-
-    // SCROLL AUTOMÁTICO
-    elems[focusIndex].scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
+    elems[focusIndex].scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
@@ -314,33 +305,6 @@ document.addEventListener("keydown", e => {
 });
 
 setTimeout(applyFocus,500);
-function testarVLC() {
-  return new Promise(resolve => {
-    let resolved = false;
-
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = "vlc://test";
-
-    document.body.appendChild(iframe);
-
-    iframe.onload = () => {
-      if (!resolved) {
-        resolved = true;
-        resolve(true); // VLC respondeu
-      }
-    };
-
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve(false); // VLC não existe
-      }
-      iframe.remove();
-    }, 500);
-  });
-}
-
 </script>
 </body>
 </html>
