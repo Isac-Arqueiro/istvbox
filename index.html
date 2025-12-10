@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -208,10 +209,24 @@ function toggleFavorite(name) {
 // ==================== ABRIR CANAL VLC UNIVERSAL ====================
 function abrirCanalVLC(canal) {
   if (!canal.url) return;
-  const vlcUrl = `vlc://${canal.url}`;
-  window.location.href = vlcUrl;
-  setTimeout(() => abrirCanal(canal), 1000);
+
+  const url = canal.url.trim();
+
+  // ANDROID → usa intent
+  if (/Android/i.test(navigator.userAgent)) {
+    const intent = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=http;package=org.videolan.vlc;end;`;
+    window.location.href = intent;
+  }
+  // WINDOWS / MAC / LINUX
+  else {
+    const vlcUrl = `vlc://${url}`;
+    window.location.href = vlcUrl;
+  }
+
+  // fallback para player interno
+  setTimeout(() => abrirCanal(canal), 1200);
 }
+
 
 // ==================== PLAYER INTERNO ====================
 function abrirCanal(canal) {
