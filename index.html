@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -103,8 +104,6 @@ body { margin:0; padding-top:60px; background:#101010; font-family:Arial,sans-se
   <div class="categories" id="categoriesContainer"></div>
   <div class="movie-container" id="moviesContainer"></div>
 </div>
-
-
 <script>
 // ==================== VARIÁVEIS ====================
 const listaSalvaUrl = "https://raw.githubusercontent.com/Isac-Arqueiro/vip01/refs/heads/main/canais";
@@ -207,31 +206,42 @@ function toggleFavorite(name) {
   renderCanaisAtuais();
 }
 
-// ==================== NOVO SISTEMA VLC (COM DETECÇÃO) ====================  
+// ==================== ABRIR CANAL VLC UNIVERSAL ====================
 async function abrirCanalVLC(canal) {
   if (!canal.url) return;
-
   const url = canal.url.trim();
+
+  // ==========================
+  // 1) TESTE: VERIFICAR SE VLC ESTÁ INSTALADO
+  // ==========================
   const vlcPossible = await testarVLC();
 
-  // ANDROID → Intent VLC
+  // ==========================
+  // 2) ANDROID → usa intent VLC
+  // ==========================
   if (/Android/i.test(navigator.userAgent)) {
     if (vlcPossible) {
+      // Abrir via VLC (intent)
       const intent = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=http;package=org.videolan.vlc;end;`;
       window.location.href = intent;
     } else {
+      console.warn("VLC não encontrado — usando player interno.");
       abrirCanal(canal);
     }
     return;
   }
 
-  // DESKTOP → abrir via vlc://
+  // ==========================
+  // 3) WINDOWS / MAC / LINUX
+  // ==========================
   if (vlcPossible) {
     const vlcUrl = `vlc://${url}`;
     window.location.href = vlcUrl;
 
+    // fallback após 1.5 segundos
     setTimeout(() => abrirCanal(canal), 1500);
   } else {
+    console.warn("VLC não encontrado — usando player interno.");
     abrirCanal(canal);
   }
 }
@@ -288,7 +298,12 @@ function applyFocus() {
   let elems = focusType === "category" ? document.querySelectorAll(".category-label") : document.querySelectorAll(".channel");
   if (elems[focusIndex]) {
     elems[focusIndex].classList.add("focused");
-    elems[focusIndex].scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // SCROLL AUTOMÁTICO
+    elems[focusIndex].scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
   }
 }
 
@@ -300,9 +315,8 @@ document.addEventListener("keydown", e => {
   if(e.key==="Enter") { let elems=focusType==="category"?document.querySelectorAll(".category-label"):document.querySelectorAll(".channel"); elems[focusIndex]?.click(); }
   applyFocus();
 });
-setTimeout(applyFocus,500);
 
-// ==================== DETECÇÃO AUTOMÁTICA DO VLC ====================
+setTimeout(applyFocus,500);
 function testarVLC() {
   return new Promise(resolve => {
     let resolved = false;
@@ -310,19 +324,20 @@ function testarVLC() {
     const iframe = document.createElement("iframe");
     iframe.style.display = "none";
     iframe.src = "vlc://test";
+
     document.body.appendChild(iframe);
 
     iframe.onload = () => {
       if (!resolved) {
         resolved = true;
-        resolve(true);
+        resolve(true); // VLC respondeu
       }
     };
 
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        resolve(false);
+        resolve(false); // VLC não existe
       }
       iframe.remove();
     }, 500);
