@@ -206,13 +206,17 @@ function toggleFavorite(name) {
 }
 
 // ==================== ABRIR CANAL VLC UNIVERSAL ====================
+// ==================== ABRIR CANAL VLC UNIVERSAL ====================
 function abrirCanalVLC(canal) {
   if (!canal.url) return;
   const url = canal.url.trim();
 
+  // Extensões compatíveis com VLC via intent
+  const vlcCompatible = /\.(m3u8|ts|mp4|avi|mkv)$/i.test(url);
+
   const isAndroid = /Android/i.test(navigator.userAgent);
 
-  if (isAndroid) {
+  if (isAndroid && vlcCompatible) {
     // Intents Android → abre VLC diretamente
     const intentUrl = `intent://${url.replace(/^https?:\/\//, '')}#Intent;package=org.videolan.vlc;scheme=https;end`;
     window.location.href = intentUrl;
@@ -220,16 +224,11 @@ function abrirCanalVLC(canal) {
     // fallback para player interno se não abrir VLC
     setTimeout(() => abrirCanal(canal), 1500);
   } else {
-    // Desktop → abrir URL direta
-    try {
-      window.location.href = url;
-      setTimeout(() => abrirCanal(canal), 1500);
-    } catch (e) {
-      console.warn("Erro ao abrir no VLC, usando player interno.");
-      abrirCanal(canal);
-    }
+    // Links não compatíveis ou Desktop → abrir no player interno
+    abrirCanal(canal);
   }
 }
+
 
 // ==================== PLAYER INTERNO ====================
 function abrirCanal(canal) {
